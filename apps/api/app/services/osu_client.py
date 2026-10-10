@@ -7,17 +7,28 @@ from requests.adapters import HTTPAdapter
 
 from app.config import Settings
 from app.schemas.scores import Player, Ruleset, Score, ScoresResponse
+from app.services.rate_limit import UpstreamBusy, UpstreamLimiter
 
 
 class ServiceError(Exception):
-    def __init__(self, status: int, code: str, message: str):
+    def __init__(self, status: int, code: str, message: str, retry_after: int | None = None):
         self.status, self.code, self.message = status, code, message
+        self.retry_after = retry_after
 
 
 class TimeoutAdapter(HTTPAdapter):
+    def __init__(self, limiter: UpstreamLimiter):
+        super().__init__()
+        self.limiter = limiter
+
     def send(self, request, **kwargs):
+        self.limiter.acquire()
         kwargs["timeout"] = (5, 20)
         response = super().send(request, **kwargs)
+        if response.status_code == 429:
+            retry_after = self.limiter.defer(response.headers.get("Retry-After"))
+            response.close()
+            raise UpstreamBusy(retry_after)
         response.raise_for_status()
         return response
 
@@ -52,6 +63,7 @@ class OsuClient:
         self.settings = settings
         self.client: Ossapi | None = None
         self.expires_at = 0.0
+        self.limiter = UpstreamLimiter(settings.osu_requests_per_minute)
 
     def get_ossapi_client(self) -> Ossapi:
         if self.client and time.monotonic() < self.expires_at:
@@ -61,16 +73,17 @@ class OsuClient:
             raise ServiceError(503, "NOT_CONFIGURED", "服务端尚未配置 osu! OAuth 凭据。")
         # Manage the client credentials token in memory, with a bounded OAuth request.
         # Supplying access_token prevents ossapi from persisting credentials via pickle.
-        response = requests.post(
-            "https://osu.ppy.sh/oauth/token",
-            json={
-                "client_id": self.settings.osu_client_id,
-                "client_secret": secret.get_secret_value(),
-                "grant_type": "client_credentials",
-                "scope": "public",
-            },
-            timeout=(5, 20),
-        )
+        with requests.Session() as session:
+            session.mount("https://", TimeoutAdapter(self.limiter))
+            response = session.post(
+                "https://osu.ppy.sh/oauth/token",
+                json={
+                    "client_id": self.settings.osu_client_id,
+                    "client_secret": secret.get_secret_value(),
+                    "grant_type": "client_credentials",
+                    "scope": "public",
+                },
+            )
         response.raise_for_status()
         token = response.json()
         self.client = Ossapi(
@@ -78,12 +91,15 @@ class OsuClient:
             secret.get_secret_value(),
             access_token=token["access_token"],
         )
-        self.client.session.mount("https://", TimeoutAdapter())
+        self.client.session.mount("https://", TimeoutAdapter(self.limiter))
         self.expires_at = time.monotonic() + max(0, token["expires_in"] - 60)
         return self.client
 
     def get_user_scores(self, username: str, mode: Ruleset = "mania") -> ScoresResponse:
         try:
+            # Check headroom for the whole lookup while the route holds the fetch lock.
+            needed = 2 if self.client and time.monotonic() < self.expires_at else 3
+            self.limiter.ensure_capacity(needed)
             api = self.get_ossapi_client()
             try:
                 user = api.user(username, mode=GameMode(mode))
@@ -111,6 +127,10 @@ class OsuClient:
                 scores=structure_scores(scores),
                 fetched_at=datetime.now(UTC),
             )
+        except UpstreamBusy as error:
+            raise ServiceError(
+                503, "UPSTREAM_BUSY", "查询服务正在等待 osu! 请求额度。", error.retry_after
+            ) from None
         except ServiceError:
             raise
         except Exception:

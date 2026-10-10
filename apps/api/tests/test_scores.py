@@ -1,3 +1,4 @@
+import os
 from datetime import UTC, datetime
 from types import SimpleNamespace
 
@@ -26,8 +27,69 @@ def test_cache_expiry_and_corrupt_file(tmp_path, monkeypatch):
     assert cache.get(key) == {"pp": 123.4}
     monkeypatch.setattr("app.services.cache.time.time", lambda: 110)
     assert cache.get(key) is None
+    assert (tmp_path / f"{key}.json").exists()  # Expired scores remain stored for retention.
     (tmp_path / f"{key}.json").write_text("broken")
     assert cache.get(key) is None
+
+
+def test_cache_retention_cleans_old_files_on_activity(tmp_path, monkeypatch):
+    clock = {"now": 100.0}
+    monkeypatch.setattr("app.services.cache.time.time", lambda: clock["now"])
+    cache = JsonCache(tmp_path, ttl=60, retention=7200)
+    key = score_cache_key("Player")
+    cache.set(key, {"pp": 100})
+    path = tmp_path / f"{key}.json"
+    os.utime(path, (100, 100))
+    clock["now"] = 160
+    assert cache.get(key) is None
+    assert path.exists()
+    clock["now"] = 7300
+    assert cache.get(key) is None
+    assert not path.exists()
+
+
+def test_query_refreshes_after_60_seconds_and_cached_queries_bypass_busy_lock(
+    tmp_path, monkeypatch
+):
+    clock = {"now": 100.0}
+    monkeypatch.setattr("app.services.cache.time.time", lambda: clock["now"])
+    app = create_app(Settings(_env_file=None, cache_path=tmp_path))
+    calls = []
+
+    def fetch(name, mode):
+        calls.append(name)
+        return ScoresResponse(
+            mode=mode,
+            player=Player(
+                user_id=123,
+                username="Player",
+                country="CN",
+                avatar_url="",
+                pp=len(calls),
+                global_rank=None,
+                hit_accuracy=99,
+            ),
+            scores=[],
+            fetched_at=datetime.now(UTC),
+        )
+
+    app.state.osu.get_user_scores = fetch
+    client = TestClient(app)
+    url = "/api/v1/players/Player/scores"
+    assert client.get(url).json()["player"]["pp"] == 1
+    app.state.fetch_lock.acquire()
+    try:
+        cached = client.get(url + "?limit=50")
+        assert cached.status_code == 200
+        assert cached.headers["X-Cache"] == "HIT"
+        assert 0 <= int(cached.headers["X-Cache-TTL"]) <= 60
+    finally:
+        app.state.fetch_lock.release()
+    clock["now"] = 160
+    refreshed = client.get(url)
+    assert refreshed.headers["X-Cache"] == "MISS"
+    assert refreshed.json()["player"]["pp"] == 2
+    assert len(calls) == 2
 
 
 def test_score_mapping_keeps_unknown_pp_and_mania_fields():

@@ -14,19 +14,22 @@ import {
 } from "lucide-react";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import Markdown from "react-markdown";
-import { getScores } from "./api";
+import { ApiError, getScores, waitForRetry } from "./api";
+import introEn from "./content/intro.en.md?raw";
 import intro from "./content/intro.md?raw";
+import { language, locale, t } from "./i18n";
 import {
   modeLabels,
   type Ruleset,
   type Score,
   type ScoresResponse,
 } from "./types";
+import WaitingPanel, { type WaitingState } from "./WaitingPanel";
 
 const number = (value: number | null, digits = 0) =>
   value === null
     ? "—"
-    : value.toLocaleString("en-US", {
+    : value.toLocaleString(locale, {
         maximumFractionDigits: digits,
         minimumFractionDigits: digits,
       });
@@ -63,7 +66,7 @@ function ScoreRow({ score, position }: { score: Score; position: number }) {
           {score.artist} <span>·</span> {score.version}
         </p>
         <div className="map-tags">
-          <span className="difficulty" title="谱面基础 SR，未应用 mods">
+          <span className="difficulty" title={t("srTitle")}>
             <Star size={11} fill="currentColor" />
             {number(score.star_rating, 2)}
           </span>
@@ -99,6 +102,7 @@ export default function App() {
   const [limit, setLimit] = useState(20);
   const [mode, setMode] = useState<Ruleset>("mania");
   const [loading, setLoading] = useState(false);
+  const [waiting, setWaiting] = useState<WaitingState | null>(null);
   const [error, setError] = useState("");
   const [result, setResult] = useState<ScoresResponse | null>(null);
   const [cache, setCache] = useState("");
@@ -136,28 +140,50 @@ export default function App() {
     setLoading(true);
     setError("");
     setResult(null);
+    setWaiting(null);
     try {
-      const response = await getScores(
-        name,
-        limit,
-        selectedMode,
-        controller.signal,
-      );
-      if (!controller.signal.aborted) {
-        setResult(response.data);
-        setCache(response.cache);
+      for (let attempt = 0; attempt <= 5; attempt++) {
+        try {
+          const response = await getScores(
+            name,
+            limit,
+            selectedMode,
+            controller.signal,
+          );
+          if (!controller.signal.aborted) {
+            setResult(response.data);
+            setCache(response.cache);
+          }
+          break;
+        } catch (failure) {
+          if (controller.signal.aborted) throw failure;
+          if (!(failure instanceof ApiError) || !failure.isBusy) throw failure;
+          if (attempt === 5) throw new Error(t("busyExhausted"));
+          // Respect Retry-After, back off, and stagger clients to avoid retry bursts.
+          const milliseconds =
+            Math.max(failure.retryAfter, 3 * 2 ** attempt) * 1000 +
+            Math.random() * 2000;
+          setWaiting({
+            until: Date.now() + milliseconds,
+            attempt: attempt + 1,
+          });
+          await waitForRetry(milliseconds, controller.signal);
+        }
       }
     } catch (failure) {
       if (!controller.signal.aborted)
         setError(
           failure instanceof TypeError
-            ? "无法连接查询服务，请检查网络后重试。"
+            ? t("networkError")
             : failure instanceof Error
               ? failure.message
-              : "查询失败，请稍后重试。",
+              : t("queryFailed"),
         );
     } finally {
-      if (!controller.signal.aborted) setLoading(false);
+      if (!controller.signal.aborted) {
+        setLoading(false);
+        setWaiting(null);
+      }
     }
   }
 
@@ -168,17 +194,24 @@ export default function App() {
     if (result) void fetchScores(result.player.username, next);
   }
 
+  function cancelWaiting() {
+    request.current?.abort();
+    setWaiting(null);
+    setLoading(false);
+  }
+
+  const customIntro = language === "zh" ? intro : introEn;
+
   return (
     <div className="app-shell">
       <header className="site-header">
-        <a className="brand" href="/" aria-label="rarverse 首页">
+        <a className="brand" href="/" aria-label={t("home")}>
           <span className="brand-icon">
             <i />
             <i />
             <i />
           </span>
-          rarverse<span className="brand-slash">/</span>
-          <span className="brand-product">scores</span>
+          {t("appName")}
         </a>
         <a
           className="header-link"
@@ -186,32 +219,33 @@ export default function App() {
           target="_blank"
           rel="noreferrer"
         >
-          访问 osu!
+          {t("visitOsu")}
           <ArrowUpRight size={14} />
         </a>
       </header>
       <main>
         <section className="hero" aria-labelledby="page-title">
-          <h1 id="page-title">osu! 成绩查询</h1>
-          {intro.trim() && (
+          <h1 id="page-title">{t("appName")}</h1>
+          {customIntro.trim() && (
             <div className="hero-description custom-copy">
-              <Markdown>{intro}</Markdown>
+              <Markdown>{customIntro}</Markdown>
             </div>
           )}
           <form className="search-panel" onSubmit={search}>
             <div className="search-input-wrap">
               <Search size={21} aria-hidden="true" />
               <label className="sr-only" htmlFor="username">
-                玩家用户名或 ID
+                {t("playerLabel")}
               </label>
               <input
                 id="username"
                 ref={input}
                 value={username}
                 onChange={(event) => setUsername(event.target.value)}
-                placeholder="输入玩家用户名或 ID"
+                placeholder={t("playerPlaceholder")}
                 autoComplete="off"
                 maxLength={32}
+                disabled={loading}
                 required
               />
               <kbd>
@@ -224,12 +258,12 @@ export default function App() {
               ) : (
                 <Search size={17} />
               )}
-              {loading ? "查询中" : "查询成绩"}
+              {waiting ? t("waiting") : loading ? t("querying") : t("query")}
               {!loading && <ChevronRight size={16} />}
             </button>
             <div className="search-options">
               <fieldset className="mode-tabs">
-                <legend className="sr-only">游戏模式</legend>
+                <legend className="sr-only">{t("mode")}</legend>
                 {(Object.keys(modeLabels) as Ruleset[]).map((value) => (
                   <button
                     type="button"
@@ -242,7 +276,7 @@ export default function App() {
                   </button>
                 ))}
               </fieldset>
-              <label htmlFor="limit">Best performance</label>
+              <label htmlFor="limit">{t("bestPerformance")}</label>
               <select
                 id="limit"
                 value={limit}
@@ -256,7 +290,9 @@ export default function App() {
           </form>
           <div className="search-note">
             <Check size={13} />
-            无需登录<span>·</span>公开成绩
+            {t("noLogin")}
+            <span>·</span>
+            {t("publicScores")}
           </div>
         </section>
 
@@ -264,22 +300,27 @@ export default function App() {
           <div className="error-panel" role="alert">
             <CircleAlert size={20} />
             <div>
-              <strong>暂时无法查询</strong>
+              <strong>{t("unableToQuery")}</strong>
               <p>{error}</p>
             </div>
           </div>
         )}
-        {loading && (
+        {waiting && <WaitingPanel waiting={waiting} onCancel={cancelWaiting} />}
+        {loading && !waiting && (
           <section className="loading-panel" role="status" aria-live="polite">
             <LoaderCircle size={24} className="spin" />
             <div>
-              <strong>正在读取玩家成绩</strong>
-              <p>正在获取 {modeLabels[mode]} best performance…</p>
+              <strong>{t("loadingScores")}</strong>
+              <p>{t("loadingMode", { mode: modeLabels[mode] })}</p>
             </div>
           </section>
         )}
         {result && (
-          <section className="results" aria-label="玩家成绩" aria-live="polite">
+          <section
+            className="results"
+            aria-label={t("playerScores")}
+            aria-live="polite"
+          >
             <div className="player-card">
               <div className="player-identity">
                 {result.player.avatar_url ? (
@@ -313,14 +354,14 @@ export default function App() {
               </div>
               <div className="player-stats">
                 <div>
-                  <span>Performance</span>
+                  <span>{t("performance")}</span>
                   <strong>
                     {number(result.player.pp, 2)}
                     <small>pp</small>
                   </strong>
                 </div>
                 <div>
-                  <span>Global rank</span>
+                  <span>{t("globalRank")}</span>
                   <strong>
                     {result.player.global_rank === null
                       ? "—"
@@ -328,7 +369,7 @@ export default function App() {
                   </strong>
                 </div>
                 <div>
-                  <span>Accuracy</span>
+                  <span>{t("accuracy")}</span>
                   <strong>
                     {number(result.player.hit_accuracy, 2)}
                     <small>%</small>
@@ -339,12 +380,16 @@ export default function App() {
             <div className="results-heading">
               <div>
                 <Trophy size={17} />
-                <h2>最佳表现</h2>
-                <span>{result.scores.length} scores</span>
+                <h2>{t("bestPerformance")}</h2>
+                <span>{t("scoreCount", { count: result.scores.length })}</span>
               </div>
               <span className="cache-status">
                 <span className="live-dot" />
-                {cache === "HIT" ? "已缓存" : "刚刚获取"}
+                {cache === "MEMORY"
+                  ? t("browserCached")
+                  : cache === "HIT"
+                    ? t("cached")
+                    : t("fetched")}
               </span>
             </div>
             {result.scores.length ? (
@@ -360,42 +405,41 @@ export default function App() {
             ) : (
               <div className="empty-scores">
                 <Keyboard size={30} />
-                <h3>还没有最佳成绩</h3>
-                <p>
-                  这位玩家目前没有公开的 {modeLabels[result.mode]} best
-                  performance。
-                </p>
+                <h3>{t("noScores")}</h3>
+                <p>{t("noScoresMode", { mode: modeLabels[result.mode] })}</p>
               </div>
             )}
             <div className="result-footnote">
-              <span>SR 为谱面基础值（未应用 mods）；pp 为 osu! 返回值。</span>
+              <span>{t("srNote")}</span>
               <span>
-                更新于 {new Date(result.fetched_at).toLocaleString("zh-CN")}
+                {t("updated", {
+                  date: new Date(result.fetched_at).toLocaleString(locale),
+                })}
               </span>
             </div>
           </section>
         )}
         {!result && !loading && !error && (
-          <section className="start-panel" aria-label="查询说明">
+          <section className="start-panel" aria-label={t("instructions")}>
             <Search size={28} aria-hidden="true" />
-            <h2>输入玩家用户名或 ID</h2>
-            <p>选择游戏模式后查询 Top 20 / Top 50 成绩。</p>
+            <h2>{t("startTitle")}</h2>
+            <p>{t("startDescription")}</p>
           </section>
         )}
         <div className="feature-strip">
           <div>
             <Trophy size={17} />
-            <span>最佳表现</span>
+            <span>{t("bestPerformance")}</span>
             <small>Best performance</small>
           </div>
           <div>
             <Star size={17} />
-            <span>关键数据</span>
+            <span>{t("keyStats")}</span>
             <small>pp · Accuracy · SR</small>
           </div>
           <div>
             <Circle size={17} />
-            <span>四种模式</span>
+            <span>{t("fourModes")}</span>
             <small>osu! · taiko · catch · mania</small>
           </div>
         </div>
@@ -404,7 +448,7 @@ export default function App() {
         <div>
           <span className="footer-brand">rarverse</span>
         </div>
-        <p>非官方 fan-made 项目，与 peppy / osu! 无隶属关系。</p>
+        <p>{t("unofficial")}</p>
         <a
           href="https://github.com/Rarverse/osu-score-fetch-GUI"
           target="_blank"

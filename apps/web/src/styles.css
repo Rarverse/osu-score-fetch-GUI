@@ -95,17 +95,6 @@ h3 {
 .brand-icon i:nth-child(2) {
   height: 14px;
 }
-.brand-slash {
-  color: #464750;
-  margin: 0 5px;
-  font-weight: 400;
-}
-.brand-product {
-  color: #8d8e9b;
-  font-size: 17px;
-  font-weight: 400;
-  letter-spacing: -0.3px;
-}
 .header-link {
   display: flex;
   align-items: center;
@@ -405,6 +394,44 @@ footer a:hover {
 }
 .loading-panel p {
   color: #a39aac;
+}
+.waiting-panel {
+  padding: 38px 20px;
+  margin-bottom: 25px;
+  text-align: center;
+  border: 1px solid #58476b55;
+  border-radius: 12px;
+  background: #211d2b;
+}
+.waiting-panel > svg {
+  color: #c9b2ff;
+  margin-bottom: 16px;
+}
+.waiting-panel h2 {
+  font-size: 18px;
+  font-weight: 500;
+}
+.waiting-panel p {
+  color: #a39aac;
+  font-size: 12px;
+  margin-top: 12px;
+  line-height: 1.8;
+}
+.waiting-countdown span {
+  display: block;
+  font-size: 10px;
+}
+.waiting-panel button {
+  border: 1px solid #58476b;
+  border-radius: 7px;
+  background: transparent;
+  color: #c9b2ff;
+  padding: 9px 18px;
+  margin-top: 20px;
+  font-size: 12px;
+}
+.waiting-panel button:hover {
+  background: #30283e;
 }
 .spin {
   animation: spin 1s linear infinite;
@@ -755,12 +782,6 @@ footer a:hover {
   .brand {
     font-size: 20px;
     gap: 8px;
-  }
-  .brand-product {
-    font-size: 14px;
-  }
-  .brand-slash {
-    margin: 0 2px;
   }
   .header-link {
     font-size: 10px;

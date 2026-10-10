@@ -1,4 +1,5 @@
 import logging
+from datetime import UTC, datetime
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Query, Request, Response
@@ -46,8 +47,8 @@ def player_scores(
     cache_status = "HIT"
     if data is None:
         # ossapi uses a shared OAuth session. Serialize misses and recheck the cache.
-        if not state.fetch_lock.acquire(timeout=2):
-            raise ServiceError(503, "SERVER_BUSY", "查询服务繁忙，请稍后重试。")
+        if not state.fetch_lock.acquire(blocking=False):
+            raise ServiceError(503, "SERVER_BUSY", "当前查询人数较多，请稍候。", retry_after=3)
         try:
             data = state.cache.get(key)
             if data is None:
@@ -66,4 +67,8 @@ def player_scores(
     response.headers["Cache-Control"] = "no-store"
     logger.info("Score query cache=%s", cache_status)
     result = ScoresResponse.model_validate(data)
+    age = (datetime.now(UTC) - result.fetched_at).total_seconds()
+    response.headers["X-Cache-TTL"] = str(
+        max(0, min(settings.cache_timeout, int(settings.cache_timeout - age)))
+    )
     return result.model_copy(update={"scores": result.scores[:limit]})

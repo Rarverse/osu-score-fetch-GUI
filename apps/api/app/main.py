@@ -15,9 +15,11 @@ from app.services.rate_limit import RateLimiter
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or Settings()
-    app = FastAPI(title="rarverse osu! scores API", version="1.0.0")
+    app = FastAPI(title="Rarsu查分器 API", version="1.0.0")
     app.state.settings = settings
-    app.state.cache = JsonCache(settings.cache_path, settings.cache_timeout)
+    app.state.cache = JsonCache(
+        settings.cache_path, settings.cache_timeout, settings.cache_retention
+    )
     app.state.osu = OsuClient(settings)
     app.state.limiter = RateLimiter(settings.rate_limit_window)
     app.state.fetch_lock = Lock()
@@ -25,13 +27,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         CORSMiddleware,
         allow_origins=settings.cors_origins,
         allow_methods=["GET"],
-        expose_headers=["X-Cache", "Retry-After"],
+        expose_headers=["X-Cache", "X-Cache-TTL", "Retry-After"],
     )
 
     @app.exception_handler(ServiceError)
     async def service_error(request: Request, error: ServiceError):
         headers = {"Cache-Control": "no-store"}
-        if hasattr(error, "retry_after"):
+        if error.retry_after is not None:
             headers["Retry-After"] = str(error.retry_after)
         return JSONResponse(
             status_code=error.status,
