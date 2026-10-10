@@ -1,0 +1,26 @@
+[project]
+name = "rarverse-osu-api"
+version = "0.1.0"
+description = "Fan-made osu! score API"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi>=0.115,<1",
+  "uvicorn[standard]>=0.34,<1",
+  "pydantic-settings>=2.8,<3",
+  "ossapi==5.3.6",
+  "requests>=2.32,<3",
+]
+
+[dependency-groups]
+dev = ["pytest>=8,<10", "httpx>=0.28,<1", "ruff>=0.11,<1"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

@@ -1,0 +1,167 @@
+# rarverse · osu! scores
+
+rarverse 旗下的非官方 fan-made 网页查分器。输入玩家用户名或 ID，查看 **osu! / taiko / catch / mania best performance**、pp、accuracy、mods、基础 SR、rank 和 combo。与 peppy / osu! 无隶属关系。
+
+支持四种模式切换，默认 mania。按后续要求扩展了原始 mania MVP；没有账号系统或批量抓取接口。
+
+首页宣传文案从 `apps/web/src/content/intro.md` 读取，默认空白。直接编辑此文件即可在查询标题下显示 Markdown（支持段落、链接、列表等；不执行原始 HTML）。开发服务会自动更新，生产需要重新构建。
+
+## 本地启动
+
+要求：Python ≥ 3.12、[uv](https://docs.astral.sh/uv/)、Node.js ≥ 20.19、npm。
+
+在仓库根目录安装前端依赖：
+
+```sh
+npm ci
+```
+
+在第一个终端启动后端：
+
+```sh
+cd apps/api
+uv sync --locked
+cp .env.example .env
+# 编辑 .env，取消注释并填入 OSU_CLIENT_ID / OSU_CLIENT_SECRET
+uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+```
+
+在第二个终端，从仓库根目录启动前端：
+
+```sh
+npm run dev
+```
+
+打开 http://127.0.0.1:5173。Vite 将 `/api` 和 `/health` 代理到 http://127.0.0.1:8000。API 交互文档：http://127.0.0.1:8000/docs；实时 OpenAPI：http://127.0.0.1:8000/openapi.json。
+
+`.env` 无需前端配置。未配置 OAuth 时 `/health` 仍可用，查询返回 `503 NOT_CONFIGURED`；不返回演示成绩。复制示例之后需填写两项凭据才能查询真实玩家。
+
+## 环境变量与密钥
+
+在 [osu! 账号设置](https://osu.ppy.sh/home/account/edit) 创建 OAuth 应用。服务端以 client credentials grant 获取 `public` scope，用户无需登录。
+
+| 变量 | 默认值 | 用途 |
+| --- | --- | --- |
+| `OSU_CLIENT_ID` | 无 | 服务端 OAuth client ID |
+| `OSU_CLIENT_SECRET` | 无 | 服务端 OAuth secret |
+| `CACHE_TIMEOUT` | `3600` | JSON 缓存 TTL（秒）；开发、生产均默认 1 小时 |
+| `CACHE_PATH` | `apps/api/.cache` | 缓存目录；自定义相对路径按启动工作目录解析 |
+| `RATE_LIMIT_WINDOW` | `60` | 限流窗口（秒） |
+| `RATE_LIMIT_PER_IP` | `20` | 每个 IP 在窗口内允许的查询次数 |
+| `RATE_LIMIT_PER_PLAYER` | `10` | 每个规范化玩家输入在窗口内允许的查询次数 |
+| `CORS_ORIGINS` | localhost 与 127.0.0.1 的 5173 端口 | JSON 数组格式的允许来源 |
+
+密钥只由 `apps/api/app/config.py` 读取。OAuth token 仅保留在后端内存，不写入 ossapi 的 pickle 文件。API 响应和前端配置不包含 secret。不要使用 `VITE_` 前缀保存任何密钥；前端无需 OAuth。`.env`、`.cache`、虚拟环境和构建产物均已忽略。
+
+## API 契约 v1
+
+`GET /health` → `200 {"status":"ok","modes":["osu","taiko","fruits","mania"]}`，表示进程存活，不表示 OAuth 或上游已联通。
+
+`GET /api/v1/players/{username}/scores?type=best&limit=20&mode=mania`
+
+- `username`：URL 编码后的用户名或 ID，去除首尾空格，大小写不敏感。
+- `mode`：`osu` / `taiko` / `fruits` / `mania`，默认 `mania`。UI 的 catch 使用 API 值 `fruits`。切换模式会重新查询当前已展示的玩家。
+- `type`：仅 `best`；不提供分页、recent 或批量接口。
+- `limit`：1–50，默认 20。一次上游最多拉 50 条，返回前按 limit 切片。
+- 响应头 `X-Cache`：`MISS` / `HIT` / `BYPASS`（缓存写入失败）；`Cache-Control: no-store` 防止浏览器缓存影响服务端观测。
+- 返回值由 Pydantic `ScoresResponse` 约束；前端契约位于 `apps/web/src/types.ts`。
+
+示例仅用于说明字段：
+
+```json
+{
+  "player": {
+    "user_id": 123,
+    "username": "Player",
+    "country": "CN",
+    "avatar_url": "https://a.ppy.sh/123",
+    "pp": 5432.1,
+    "global_rank": 1000,
+    "hit_accuracy": 98.76
+  },
+  "mode": "mania",
+  "type": "best",
+  "scores": [{
+    "score_id": 456,
+    "beatmap_id": 789,
+    "beatmap_title": "Song",
+    "artist": "Artist",
+    "version": "4K Hard",
+    "cover_url": null,
+    "star_rating": 4.52,
+    "accuracy": 0.9876,
+    "pp": 200.5,
+    "rank": "S",
+    "mods": ["DT"],
+    "max_combo": 1234,
+    "played_at": "2026-10-10T01:00:00Z"
+  }],
+  "fetched_at": "2026-10-10T02:00:00Z"
+}
+```
+
+成绩 `accuracy` 是 0–1；玩家统计 `hit_accuracy` 是 0–100。`pp`、排名、未知谱面字段可以为 `null`，UI 显示 `—`，不会伪造 0。`star_rating` 是 **未应用 mods 的谱面基础 SR**，当前不返回 `star_rating_modded`。rank 将 API 的 `X/XH` 映射为 `SS/SSH`，保留银色 rank。时间为 ISO 8601，页面按浏览器本地时间显示。
+
+错误统一为 `{"error":{"code":"PLAYER_NOT_FOUND","message":"…"}}`：
+
+| HTTP | code | 含义 |
+| --- | --- | --- |
+| 404 | `PLAYER_NOT_FOUND` | 玩家查询上游返回 404 |
+| 422 | `INVALID_PLAYER` / `INVALID_REQUEST` | 输入、mode、type 或 limit 不合法 |
+| 429 | `RATE_LIMITED` | 本地短窗限流；`Retry-After` 为等待秒数 |
+| 502 | `UPSTREAM_ERROR` | OAuth / osu! 请求失败或上游数据解析失败 |
+| 503 | `NOT_CONFIGURED` / `SERVER_BUSY` | 未配置密钥 / 并发查询繁忙 |
+
+## 缓存与限流
+
+`services/cache.py` 以 SHA-256 键保存 `.cache/<hash>.json`，内容是 `created_at` 和结构化响应 `data`。键包含契约版本、所选模式、best、最多 50 条和规范化玩家标识。首尾空格、大小写、数字 ID 的前导零会归一化；成功查询后用户名和 ID 均写入同一份结果，Top 20 / Top 50 共用缓存。写入使用原子替换；过期或损坏文件视为 miss，不用过期成绩掩盖上游失败。
+
+所有查询（包括 HIT）都受 IP 与玩家输入限流。缓存 miss 串行使用共享 ossapi session，同时重查缓存以减少重复上游调用。网络连接 / 读取超时为 5 / 20 秒。图片直接使用 osu! 返回的 URL，后端本轮不代理或缓存图片。
+
+限流与并发锁位于进程内，生产 MVP 必须单 worker 运行。公开部署时在可信反向代理上配置真实 IP：只信任该代理的 forwarded headers，禁止客户端直连后端。多副本或多 worker 部署前应改用 Redis 共享限流和缓存锁；当前单机限流不能保证阻止分布式收割。缓存目录无自动总量清理，需按磁盘预算定期清理过期文件。
+
+## 对照参考仓
+
+只读参考：[Rarverse/osu-score-fetch](https://github.com/Rarverse/osu-score-fetch)，本次核对 main 提交 `ee287362d9228034c0c0116fbd114f6dd9e30430`。旁路 clone 未放入目标仓。
+
+| 参考仓 main.py | 网页实现 |
+| --- | --- |
+| `get_ossapi_client` | `services/osu_client.py`：服务端 OAuth、内存 token、超时 |
+| `get_user_scores` / `search_user` / `get_user_info` | 指定所选模式查玩家、拉 best 50、读取玩家统计 |
+| `structure_scores` | 纯映射函数，保留 title、beatmap_id、cover、SR、accuracy、pp、rank、mods，并补充难度名、combo、时间 |
+| `beatmap_data_cache.json` 中 beatmaps / beatmapsets / last_update_time | `services/cache.py`：按玩家存储结构化 JSON，包含谱面元数据，以 TTL 刷新 |
+| `.cache/beatmap_cover/<id>/cover.jpg`、`.cache/user/<id>/…` | 本轮浏览器直接加载图片 URL，不复制 Pillow 图片缓存 |
+
+使用与参考一致的 `ossapi==5.3.6`。未复制 CLI、Pillow 出图、全局可变谱面字典或调试清缓存命令。当前复用的是拉分、结构化字段和 TTL 缓存思路，四种模式的玩家统计与成绩同时指定 ruleset。osu! API 依据：[官方 API 文档](https://osu.ppy.sh/docs/)。
+
+## 检查与手动验收
+
+前端使用 Biome 统一 lint / format；后端使用 Ruff，Python 导入排序由 Ruff 管理。CSS 使用组件 class 范围，关闭会对不相关组件误报的 `noDescendingSpecificity` 规则。
+
+```sh
+# 仓库根目录
+npm run typecheck
+npm run lint
+npm run build
+npm run format
+
+# apps/api
+uv run ruff check .
+uv run ruff format --check .
+uv run pytest
+```
+
+自动测试覆盖缓存键、过期/损坏缓存、成绩字段映射、API 缓存命中、四模式缓存隔离和上游模式参数、限流与错误契约，不需要凭据。真实数据需按以下步骤验收：
+
+1. 配好 `apps/api/.env` 后启动两个 dev 服务；访问 `/health` 确认 200。
+2. 输入有公开 mania best 成绩的真实玩家用户名或 ID，切换四种模式，核对对应 osu! 玩家页的 pp 和成绩字段；可以先用已知玩家 `jakads`（成绩可随时间变化）。
+3. 连续请求同一查询，第一次 `X-Cache: MISS`，第二次 `HIT`；切换 limit 为 50 仍命中。
+4. 查询不存在的用户名，确认 404 提示；短窗重复查询超过配置阈值，确认 429 和 `Retry-After`。
+5. 检查浏览器 Network 中无 OAuth secret；前端 `dist` 只有页面资源，OAuth 请求只在 API 进程发起。
+6. 检查桌面和手机宽度：提交、加载、错误、空成绩和列表；页脚保留非官方声明。
+
+## 生产与后续
+
+前端 `npm run build` 输出 `apps/web/dist`。用静态服务器托管，并在同域代理 `/api`、`/health` 到 FastAPI；不要将 `vite preview` 用作生产服务器。后端 `uv run uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 1`，由反向代理提供 HTTPS。生产 `.env` 与缓存目录仅授予服务账户访问。
+
+已知限制：仅 best、最多 50 条、基础 SR；没有自动刷新、recent、mods 后难度或 Pillow 出图。下一步可先加入有缓存的 mods 难度查询，再做 B50 卡片/图片导出；recent 需要同步扩展契约、缓存键和验收。

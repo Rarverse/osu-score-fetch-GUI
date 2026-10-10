@@ -1,0 +1,187 @@
+from datetime import UTC, datetime
+from types import SimpleNamespace
+
+import pytest
+import requests
+from fastapi.testclient import TestClient
+
+from app.config import Settings
+from app.main import create_app
+from app.schemas.scores import Player, ScoresResponse
+from app.services.cache import JsonCache, score_cache_key
+from app.services.osu_client import OsuClient, ServiceError, structure_scores
+
+
+def test_cache_key_normalizes_player_and_cannot_escape_path():
+    assert score_cache_key(" Player ") == score_cache_key("player")
+    assert score_cache_key("000123") == score_cache_key("123")
+    assert len(score_cache_key("../../.env")) == 64
+
+
+def test_cache_expiry_and_corrupt_file(tmp_path, monkeypatch):
+    monkeypatch.setattr("app.services.cache.time.time", lambda: 100)
+    cache = JsonCache(tmp_path, ttl=10)
+    key = score_cache_key("player")
+    cache.set(key, {"pp": 123.4})
+    assert cache.get(key) == {"pp": 123.4}
+    monkeypatch.setattr("app.services.cache.time.time", lambda: 110)
+    assert cache.get(key) is None
+    (tmp_path / f"{key}.json").write_text("broken")
+    assert cache.get(key) is None
+
+
+def test_score_mapping_keeps_unknown_pp_and_mania_fields():
+    score = SimpleNamespace(
+        id=10,
+        beatmap=SimpleNamespace(id=20, version="4K", difficulty_rating=5.2),
+        beatmapset=SimpleNamespace(
+            title="Song",
+            artist="Artist",
+            covers=SimpleNamespace(list_2x="https://example.com/cover.jpg"),
+        ),
+        accuracy=0.9876,
+        pp=None,
+        rank=SimpleNamespace(value="XH"),
+        mods=[SimpleNamespace(acronym="DT")],
+        max_combo=1000,
+        ended_at=datetime.now(UTC),
+    )
+    result = structure_scores([score])[0]
+    assert result.pp is None
+    assert result.rank == "SSH"
+    assert result.mods == ["DT"]
+    assert result.star_rating == 5.2
+    assert result.accuracy == 0.9876
+
+
+def test_api_cache_validation_and_rate_limit(tmp_path):
+    app = create_app(Settings(_env_file=None, cache_path=tmp_path, rate_limit_per_player=2))
+    calls = []
+
+    def fetch(name, mode):
+        calls.append(name)
+        return ScoresResponse(
+            player=Player(
+                user_id=123,
+                username="Player",
+                country="CN",
+                avatar_url="",
+                pp=100,
+                global_rank=None,
+                hit_accuracy=99,
+            ),
+            scores=[],
+            fetched_at=datetime.now(UTC),
+        )
+
+    app.state.osu.get_user_scores = fetch
+    client = TestClient(app)
+    assert client.get("/health").json()["status"] == "ok"
+    url = "/api/v1/players/Player/scores"
+    first = client.get(url)
+    assert first.status_code == 200 and first.headers["X-Cache"] == "MISS"
+    assert client.get(url).headers["X-Cache"] == "HIT"
+    assert client.get("/api/v1/players/123/scores").headers["X-Cache"] == "HIT"
+    assert len(calls) == 1
+    limited = client.get(url)
+    assert limited.status_code == 429 and int(limited.headers["Retry-After"]) >= 1
+    assert limited.json()["error"]["code"] == "RATE_LIMITED"
+    assert client.get(url + "?limit=51").status_code == 422
+    assert client.get(url + "?type=recent").status_code == 422
+
+
+def test_api_error_contract(tmp_path):
+    app = create_app(Settings(_env_file=None, cache_path=tmp_path))
+    client = TestClient(app)
+    assert client.get("/api/v1/players/test/scores").json()["error"]["code"] == "NOT_CONFIGURED"
+    for status, code in [(404, "PLAYER_NOT_FOUND"), (502, "UPSTREAM_ERROR")]:
+
+        def fetch(name, mode, status=status, code=code):
+            raise ServiceError(status, code, "test error")
+
+        app.state.osu.get_user_scores = fetch
+        response = client.get("/api/v1/players/test/scores")
+        assert response.status_code == status
+        assert response.json()["error"]["code"] == code
+
+
+@pytest.mark.parametrize(
+    "upstream_status, expected_status", [(404, 404), (401, 502), (429, 502), (500, 502)]
+)
+def test_upstream_http_errors_are_mapped_without_leaking_details(
+    monkeypatch, upstream_status, expected_status
+):
+    service = OsuClient(Settings(_env_file=None))
+    response = requests.Response()
+    response.status_code = upstream_status
+
+    def user(*args, **kwargs):
+        raise requests.HTTPError("sensitive upstream details", response=response)
+
+    monkeypatch.setattr(service, "get_ossapi_client", lambda: SimpleNamespace(user=user))
+    with pytest.raises(ServiceError) as failure:
+        service.get_user_scores("test")
+    assert failure.value.status == expected_status
+    assert "sensitive" not in failure.value.message
+
+
+def test_modes_use_separate_cache_entries(tmp_path):
+    app = create_app(Settings(_env_file=None, cache_path=tmp_path, rate_limit_per_player=20))
+    calls = []
+
+    def fetch(name, mode):
+        calls.append(mode)
+        return ScoresResponse(
+            mode=mode,
+            player=Player(
+                user_id=123,
+                username="Player",
+                country="CN",
+                avatar_url="",
+                pp=100,
+                global_rank=None,
+                hit_accuracy=99,
+            ),
+            scores=[],
+            fetched_at=datetime.now(UTC),
+        )
+
+    app.state.osu.get_user_scores = fetch
+    client = TestClient(app)
+    for mode in ["osu", "taiko", "fruits", "mania"]:
+        url = f"/api/v1/players/Player/scores?mode={mode}"
+        first = client.get(url)
+        assert first.status_code == 200
+        assert first.json()["mode"] == mode
+        assert first.headers["X-Cache"] == "MISS"
+        assert client.get(url).headers["X-Cache"] == "HIT"
+    assert calls == ["osu", "taiko", "fruits", "mania"]
+    assert len({score_cache_key("Player", mode) for mode in calls}) == 4
+    assert client.get("/api/v1/players/Player/scores?mode=catch").status_code == 422
+
+
+@pytest.mark.parametrize("mode", ["osu", "taiko", "fruits", "mania"])
+def test_osu_client_uses_selected_mode_for_stats_and_scores(monkeypatch, mode):
+    service = OsuClient(Settings(_env_file=None))
+    queried_modes = []
+
+    def user(name, *, mode):
+        queried_modes.append(mode.value)
+        return SimpleNamespace(
+            id=123,
+            username="Player",
+            country_code="CN",
+            avatar_url="",
+            statistics=SimpleNamespace(pp=100, global_rank=10, hit_accuracy=99),
+        )
+
+    def scores(user_id, score_type, **kwargs):
+        queried_modes.append(kwargs["mode"].value)
+        return []
+
+    monkeypatch.setattr(
+        service, "get_ossapi_client", lambda: SimpleNamespace(user=user, user_scores=scores)
+    )
+    response = service.get_user_scores("Player", mode)
+    assert queried_modes == [mode, mode]
+    assert response.mode == mode
