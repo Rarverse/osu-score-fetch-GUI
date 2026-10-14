@@ -6,7 +6,11 @@ rarverse 旗下的非官方 fan-made 网页查分器。网站名称为 **Rarsu�
 
 界面按浏览器语言偏好自动选择中文或英文（识别 `zh-*` / `en-*`，无匹配时使用英文），包括标题、输入提示、错误、等待页和成绩说明。译文位于 `apps/web/src/i18n.ts`。
 
-中文首页文案编辑 `apps/web/src/content/intro.md`，英文编辑 `intro.en.md`，两者默认空白。Markdown 支持段落、链接、列表等，不执行原始 HTML。开发服务会自动更新，生产需要重新构建。
+中文首页文案在 `apps/web/src/content/intro.md`，英文在 `intro.en.md`。页面按浏览器语言渲染其中一份 Markdown（段落、链接、列表；不执行原始 HTML）。开发服务会自动更新，生产需要重新构建。
+
+`apps/web/index.html` 的标题是「Rarsu查分器」。`description` 和 `og:description` 使用中文介绍的第一句；英文浏览器加载后，现有的语言逻辑会把这两条 meta 换成英文第一句。`og:title` 固定为 `Rarsu查分器 / Rarsu Score Checker`，`og:image` 指向 `/og.png`（另有 `public/og.svg`），`og:type` 为 `website`，`twitter:card` 为 `summary_large_image`。
+
+`og:image` 和 `og:url` 在构建时由 `VITE_SITE_URL` 拼成绝对地址，例如 `VITE_SITE_URL=https://scores.example.com` 得到 `https://scores.example.com/og.png`。本地开发不设置该变量时回退为 `/og.png` 和 `/`，页面本身仍可用；发给社交平台的生产构建必须带上站点根地址。模式按钮使用页面内的简易 SVG，选中项为 `#c9b2ff`，当前模式标记的底色是 `#101116`。
 
 ## 本地启动
 
@@ -49,6 +53,8 @@ npm run dev
 | `CACHE_TIMEOUT` | `60` | 相同查询的合并窗口（秒）；至少 60 秒，窗口过后由主动查询触发刷新 |
 | `CACHE_RETENTION` | `15552000` | 缓存文件保留 180 天；不得短于 `CACHE_TIMEOUT` |
 | `CACHE_PATH` | `apps/api/.cache` | 缓存目录；自定义相对路径按启动工作目录解析 |
+| `STATS_PATH` | `apps/api/data/cache/usage.json` | 每日匿名使用统计 JSON；相对路径按启动工作目录解析 |
+| `NEGATIVE_CACHE_TTL` | `60` | 玩家不存在结果的缓存秒数 |
 | `RATE_LIMIT_WINDOW` | `60` | 限流窗口（秒） |
 | `RATE_LIMIT_PER_IP` | `20` | 每个 IP 在窗口内允许的查询次数 |
 | `RATE_LIMIT_PER_PLAYER` | `10` | 每个规范化玩家输入在窗口内允许的查询次数 |
@@ -58,6 +64,18 @@ npm run dev
 服务端密钥由 `apps/api/app/config.py` 读取。页面中的可选 Client ID / Client Secret 只保存在当前页面运行内存，查询时通过 HTTPS 请求头发送；关闭或刷新页面后需要重新输入。后端只用这些凭据换取本次查询的 OAuth token，不写入文件或复用为服务端凭据。请勿在非 HTTPS 的公开站点输入 secret；localhost 开发环境例外。OAuth token 不写入 ossapi 的 pickle 文件，API 响应不包含 secret。不要使用 `VITE_` 前缀保存任何密钥。`.env`、`.cache`、虚拟环境和构建产物均已忽略。
 
 用户可在页面展开「使用自己的 osu! API」，从 [osu! 账号设置](https://osu.ppy.sh/home/account/edit) 创建仅需 `public` scope 的 OAuth 应用并填入 Client ID 与 Client Secret。两项凭据必须同时提供；用户凭据只用于缓存 miss 的上游查询。服务端仍对所有凭据共用同一全站 60 次/分钟请求预算、请求间隔、并发锁、缓存和限流，个人凭据不会绕过服务限额。缓存命中返回相同的公开数据，不会再次验证所填凭据。
+
+## 隐私与使用统计
+
+为了回答「有没有人会回访」，每次成绩查询会计入按 UTC 日期汇总的计数。没有管理页面，也没有查询这些计数的接口。
+
+浏览器把随机匿名 ID 放在 `localStorage`（键 `rarsu-visitor-id`），只在成绩请求上通过 `X-Visitor-Id` 发送。服务端保存的是该 ID 和成功查询所得玩家 ID 的加盐 SHA-256，用来去重和判断回访；统计文件里没有原始用户名、原始访客 ID 或 IP。同一访客如果在更早的 UTC 日期出现过，当天记为回访一次，同一天多次查询不重复累加。
+
+每天的汇总包含：查询总数、成功查询的去重玩家数、各模式查询数、回访访客数。404、限流和其他失败只计入查询总数和对应模式，不计入去重玩家。成功查询按玩家 ID 去重，所以用用户名或数字 ID 查到同一个人只算一个玩家。
+
+默认路径是 `STATS_PATH`（`apps/api/data/cache/usage.json`）。`apps/api/data/cache/` 和 `data/cache/` 已写入 `.gitignore`，不要提交统计文件。生产环境把 `CACHE_PATH` 和 `STATS_PATH` 指到 `/var/lib/osu-score-api/`，见 `deploy/README.md`。写入使用进程内锁和原子替换，只适合单 worker；统计写失败不影响查询结果。
+
+未找到的玩家会负缓存约 60 秒（`NEGATIVE_CACHE_TTL`）。窗口内再次查询任意模式都返回相同的 404 `PLAYER_NOT_FOUND`，带 `Cache-Control: no-store`，并用 `X-Cache` 标出 `MISS` 或 `HIT`。其他错误不写入这份缓存。
 
 ## API 契约 v1
 
@@ -179,6 +197,6 @@ uv run pytest
 
 ## 生产与后续
 
-前端 `npm run build` 输出 `apps/web/dist`。用静态服务器托管，并在同域代理 `/api`、`/health` 到 FastAPI；不要将 `vite preview` 用作生产服务器。后端 `uv run uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 1`，由反向代理提供 HTTPS。生产 `.env` 与缓存目录仅授予服务账户访问。
+前端 `npm run build` 输出 `apps/web/dist`。自建部署使用 `deploy/compose.yaml`：Caddy 托管静态文件并反代 `/api` 与 `/health`，API 不对宿主机发布端口。步骤、GHCR 登录和回滚见 `deploy/README.md`。不要将 `vite preview` 用作生产服务器。本地仍可用 `uv run uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 1`。生产密钥放在 `/etc/osu-score-api/env`（权限 `600`），缓存和统计放在数据卷 `/var/lib/osu-score-api`，不要写进仓库。
 
 已知限制：仅 best、最多 50 条、基础 SR；没有后台自动轮询、recent、mods 后难度或 Pillow 出图。下一步可先加入有缓存的 mods 难度查询，再做 B50 卡片/图片导出；recent 需要同步扩展契约、缓存键和验收。
