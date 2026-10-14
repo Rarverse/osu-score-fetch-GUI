@@ -106,6 +106,31 @@ docker compose --env-file /opt/osu-score-api/.env.deploy -f deploy/compose.yaml 
 
 再跑一次上面的健康检查。web 镜像如果是用另一个 `VITE_SITE_URL` 构建的，回滚标签也会带回当时写进页面的 OG 地址。
 
+## Usage stats
+
+`deploy/compose.yaml` 把命名卷 `osu-data` 挂到服务 `api` 的 `/var/lib/osu-score-api`，并用 `STATS_PATH` 固定统计文件：
+
+- 容器内：`/var/lib/osu-score-api/stats/usage.json`
+- 卷 `osu-data` 内：`stats/usage.json`（卷根对应容器里的 `/var/lib/osu-score-api`）
+
+成绩缓存是同一卷上的 `cache/`（`CACHE_PATH=/var/lib/osu-score-api/cache`）。统计和缓存不在两个卷里。
+
+`api` 已经启动时，把统计文件复制到当前目录：
+
+```sh
+docker compose --env-file /opt/osu-score-api/.env.deploy -f deploy/compose.yaml cp api:/var/lib/osu-score-api/stats/usage.json ./stats.json
+```
+
+`--env-file` 与上面的启动命令相同：compose 文件会展开 `IMAGE_TAG` 和 `SITE_DOMAIN`。
+
+不要为了清缓存删掉卷 `osu-data`。`docker compose down -v` 和 `docker volume rm` 会把 `usage.json` 和缓存一起删掉。只删除缓存目录，保留 `stats/`：
+
+```sh
+docker compose --env-file /opt/osu-score-api/.env.deploy -f deploy/compose.yaml exec api rm -rf /var/lib/osu-score-api/cache
+```
+
+下次写入缓存时服务会重新创建该目录。不要删除 `/var/lib/osu-score-api/stats`。
+
 ## 构建时的依赖约束
 
 - 前端：`npm ci --ignore-scripts`，仓库根 `.npmrc` 同样设置了 `ignore-scripts=true`。
