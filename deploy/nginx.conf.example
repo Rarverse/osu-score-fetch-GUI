@@ -1,0 +1,40 @@
+# HTTPS is this Nginx's job. The score site is plain HTTP on loopback:
+#
+#   BIND_ADDR=127.0.0.1
+#   HTTP_PORT=8080
+#
+# The ssl_certificate lines are placeholders. Point them at files you manage
+# outside this repository. Forward `/` unchanged. $proxy_add_x_forwarded_for
+# keeps a client-supplied X-Forwarded-For and appends the address Nginx
+# actually saw. Caddy trusts only the docker bridge gateway, then walks that
+# list from the right, so a spoofed address to the left is not the visitor IP.
+
+upstream osu_score_web {
+    server 127.0.0.1:8080;
+}
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name scores.rarverse.com;
+    return 301 https://scores.rarverse.com$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    server_name scores.rarverse.com;
+
+    ssl_certificate     /path/to/fullchain.pem;
+    ssl_certificate_key /path/to/privkey.pem;
+
+    location / {
+        proxy_pass http://osu_score_web;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host $host;
+    }
+}

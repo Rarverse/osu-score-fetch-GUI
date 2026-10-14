@@ -1,4 +1,10 @@
-# Host ports: web publishes 80 and 443 only. The API stays on the compose network.
+# Project name is fixed so Portainer and `docker compose` from any directory
+# manage the same containers and the osu-data volume.
+name: osu-score-api
+
+# One HTTP port. HTTPS is the reverse proxy on the host. Defaults are
+# 127.0.0.1:8080 so this stack does not take host port 80 or 443.
+# The deploy job overwrites this file and only preserves .env.deploy.
 services:
   api:
     image: ghcr.io/rarverse/osu-score-fetch-gui-api:${IMAGE_TAG:?set IMAGE_TAG}
@@ -10,6 +16,22 @@ services:
     environment:
       CACHE_PATH: /var/lib/osu-score-api/cache
       STATS_PATH: /var/lib/osu-score-api/stats/usage.json
+      FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-172.31.210.10}
+    command:
+      - uvicorn
+      - app.main:app
+      - --host
+      - "0.0.0.0"
+      - --port
+      - "8000"
+      - --workers
+      - "1"
+      - --no-access-log
+      - --proxy-headers
+      - --forwarded-allow-ips
+      - ${FORWARDED_ALLOW_IPS:-172.31.210.10}
+    networks:
+      - backend
     volumes:
       - osu-data:/var/lib/osu-score-api
     restart: unless-stopped
@@ -22,19 +44,23 @@ services:
       args:
         VITE_SITE_URL: ${VITE_SITE_URL:-}
     environment:
-      SITE_DOMAIN: ${SITE_DOMAIN:?set SITE_DOMAIN}
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-127.0.0.1 ${COMPOSE_GATEWAY:-172.31.210.1}}
     ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - caddy-data:/data
-      - caddy-config:/config
+      - "${BIND_ADDR:-127.0.0.1}:${HTTP_PORT:-8080}:80"
+    networks:
+      backend:
+        ipv4_address: ${WEB_IPV4:-172.31.210.10}
     depends_on:
       api:
         condition: service_healthy
     restart: unless-stopped
 
+networks:
+  backend:
+    ipam:
+      config:
+        - subnet: ${COMPOSE_SUBNET:-172.31.210.0/24}
+          gateway: ${COMPOSE_GATEWAY:-172.31.210.1}
+
 volumes:
   osu-data:
-  caddy-data:
-  caddy-config:

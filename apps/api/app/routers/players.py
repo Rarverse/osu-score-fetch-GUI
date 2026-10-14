@@ -4,6 +4,7 @@ from typing import Annotated, Literal
 
 from fastapi import APIRouter, Header, Query, Request, Response
 
+from app.client_ip import client_ip
 from app.schemas.scores import ErrorResponse, Ruleset, ScoresResponse
 from app.services.cache import normalize_player, not_found_cache_key, score_cache_key
 from app.services.osu_client import ServiceError
@@ -58,7 +59,11 @@ def player_scores(
                 "INVALID_CREDENTIALS",
                 "请同时提供有效的 osu! Client ID 和 Client Secret。",
             )
-        ip = request.client.host if request.client else "unknown"
+        ip = client_ip(
+            request.client.host if request.client else None,
+            request.headers.get("x-forwarded-for"),
+            settings.forwarded_allow_ips,
+        )
         retry_after = state.limiter.check(
             [
                 (f"ip:{ip}", settings.rate_limit_per_ip),
