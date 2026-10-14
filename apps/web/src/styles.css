@@ -284,6 +284,61 @@ h1 {
 .search-note svg {
   color: #b09ccf;
 }
+.api-credentials {
+  max-width: 690px;
+  margin: 16px auto 0;
+  text-align: left;
+  color: #a5a3af;
+  font-size: 12px;
+}
+.api-credentials summary {
+  display: inline-block;
+  cursor: pointer;
+  color: #c9b2ff;
+}
+.api-credentials-content {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+  padding: 16px;
+  border: 1px solid #34333f;
+  border-radius: 10px;
+  background: #191a22;
+}
+.api-credentials-content p {
+  margin: 0;
+  line-height: 1.6;
+}
+.api-credentials-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.api-credentials-content > label:not(.api-credentials-toggle) {
+  display: grid;
+  gap: 6px;
+}
+.api-credentials-content input:not([type="checkbox"]) {
+  width: 100%;
+  padding: 9px 10px;
+  border: 1px solid #3b3548;
+  border-radius: 6px;
+  background: #111218;
+  color: #f1eff7;
+}
+.api-credentials-content input:disabled {
+  opacity: 0.55;
+}
+.api-credentials-note {
+  color: #858390;
+  font-size: 11px;
+}
+.api-credentials-content a {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: #c9b2ff;
+}
 .search-note > span {
   margin: 0 2px;
   color: #4a4855;

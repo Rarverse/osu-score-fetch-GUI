@@ -27,6 +27,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         CORSMiddleware,
         allow_origins=settings.cors_origins,
         allow_methods=["GET"],
+        allow_headers=["X-Osu-Client-Id", "X-Osu-Client-Secret"],
         expose_headers=["X-Cache", "X-Cache-TTL", "Retry-After"],
     )
 

@@ -2,7 +2,7 @@ import logging
 from datetime import UTC, datetime
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Query, Request, Response
+from fastapi import APIRouter, Header, Query, Request, Response
 
 from app.schemas.scores import ErrorResponse, Ruleset, ScoresResponse
 from app.services.cache import normalize_player, score_cache_key
@@ -24,10 +24,20 @@ def player_scores(
     type: Literal["best"] = "best",
     limit: Annotated[int, Query(ge=1, le=50)] = 20,
     mode: Ruleset = "mania",
+    osu_client_id: Annotated[int | None, Header(alias="X-Osu-Client-Id", gt=0)] = None,
+    osu_client_secret: Annotated[str | None, Header(alias="X-Osu-Client-Secret")] = None,
 ):
     name = normalize_player(username)
     if not name or len(name) > 32 or any(ord(char) < 32 or char in "/\\?#" for char in name):
         raise ServiceError(422, "INVALID_PLAYER", "请输入 1–32 字符的用户名或 ID。")
+    if (osu_client_id is None) != (osu_client_secret is None) or (
+        osu_client_secret is not None and not osu_client_secret.strip()
+    ):
+        raise ServiceError(
+            422,
+            "INVALID_CREDENTIALS",
+            "请同时提供有效的 osu! Client ID 和 Client Secret。",
+        )
     state = request.app.state
     settings = state.settings
     ip = request.client.host if request.client else "unknown"
@@ -52,7 +62,10 @@ def player_scores(
         try:
             data = state.cache.get(key)
             if data is None:
-                result = state.osu.get_user_scores(name, mode)
+                if osu_client_id is None:
+                    result = state.osu.get_user_scores(name, mode)
+                else:
+                    result = state.osu.get_user_scores(name, mode, osu_client_id, osu_client_secret)
                 data = result.model_dump(mode="json")
                 try:
                     for alias in {name, str(result.player.user_id), result.player.username}:

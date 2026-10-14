@@ -56,6 +56,7 @@ export async function getScores(
   limit: number,
   mode: Ruleset,
   signal: AbortSignal,
+  credentials?: { clientId: string; clientSecret: string },
 ) {
   if (signal.aborted) throw new DOMException("Aborted", "AbortError");
   const key = cacheKey(username, mode, limit);
@@ -64,9 +65,14 @@ export async function getScores(
   }
   const cached = cache.get(key);
   if (cached) return { data: cached.data, cache: "MEMORY" };
+  const headers = new Headers();
+  if (credentials) {
+    headers.set("X-Osu-Client-Id", credentials.clientId);
+    headers.set("X-Osu-Client-Secret", credentials.clientSecret);
+  }
   const response = await fetch(
     `/api/v1/players/${encodeURIComponent(username)}/scores?type=best&limit=${limit}&mode=${mode}`,
-    { signal },
+    { signal, headers },
   );
   if (!response.ok) {
     const body = (await response

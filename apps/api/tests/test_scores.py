@@ -167,6 +167,46 @@ def test_api_error_contract(tmp_path):
         assert response.json()["error"]["code"] == code
 
 
+def test_custom_oauth_credentials_are_forwarded_only_with_complete_pair(tmp_path):
+    app = create_app(Settings(_env_file=None, cache_path=tmp_path))
+    received = []
+
+    def fetch(name, mode, client_id, client_secret):
+        received.append((client_id, client_secret))
+        return ScoresResponse(
+            player=Player(
+                user_id=123,
+                username="Player",
+                country="CN",
+                avatar_url="",
+                pp=100,
+                global_rank=None,
+                hit_accuracy=99,
+            ),
+            scores=[],
+            fetched_at=datetime.now(UTC),
+        )
+
+    app.state.osu.get_user_scores = fetch
+    client = TestClient(app)
+    incomplete = client.get(
+        "/api/v1/players/Player/scores",
+        headers={"X-Osu-Client-Id": "123"},
+    )
+    assert incomplete.status_code == 422
+    assert incomplete.json()["error"]["code"] == "INVALID_CREDENTIALS"
+    response = client.get(
+        "/api/v1/players/Player/scores",
+        headers={
+            "X-Osu-Client-Id": "123",
+            "X-Osu-Client-Secret": "private-value",
+        },
+    )
+    assert response.status_code == 200
+    assert received == [(123, "private-value")]
+    assert "private-value" not in response.text
+
+
 @pytest.mark.parametrize(
     "upstream_status, expected_status", [(404, 404), (401, 502), (429, 502), (500, 502)]
 )

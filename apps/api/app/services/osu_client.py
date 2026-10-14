@@ -65,11 +65,18 @@ class OsuClient:
         self.expires_at = 0.0
         self.limiter = UpstreamLimiter(settings.osu_requests_per_minute)
 
-    def get_ossapi_client(self) -> Ossapi:
-        if self.client and time.monotonic() < self.expires_at:
+    def get_ossapi_client(
+        self, client_id: int | None = None, client_secret: str | None = None
+    ) -> Ossapi:
+        custom_credentials = client_id is not None or client_secret is not None
+        if not custom_credentials and self.client and time.monotonic() < self.expires_at:
             return self.client
-        secret = self.settings.osu_client_secret
-        if not self.settings.osu_client_id or not secret or not secret.get_secret_value():
+        configured_secret = self.settings.osu_client_secret
+        resolved_client_id = client_id or self.settings.osu_client_id
+        resolved_secret = client_secret or (
+            configured_secret.get_secret_value() if configured_secret else None
+        )
+        if not resolved_client_id or not resolved_secret:
             raise ServiceError(503, "NOT_CONFIGURED", "服务端尚未配置 osu! OAuth 凭据。")
         # Manage the client credentials token in memory, with a bounded OAuth request.
         # Supplying access_token prevents ossapi from persisting credentials via pickle.
@@ -77,30 +84,50 @@ class OsuClient:
             session.mount("https://", TimeoutAdapter(self.limiter))
             response = session.post(
                 "https://osu.ppy.sh/oauth/token",
-                json={
-                    "client_id": self.settings.osu_client_id,
-                    "client_secret": secret.get_secret_value(),
+                data={
+                    "client_id": resolved_client_id,
+                    "client_secret": resolved_secret,
                     "grant_type": "client_credentials",
                     "scope": "public",
                 },
             )
         response.raise_for_status()
         token = response.json()
-        self.client = Ossapi(
-            self.settings.osu_client_id,
-            secret.get_secret_value(),
+        client = Ossapi(
+            resolved_client_id,
+            resolved_secret,
             access_token=token["access_token"],
         )
-        self.client.session.mount("https://", TimeoutAdapter(self.limiter))
+        client.session.mount("https://", TimeoutAdapter(self.limiter))
+        if custom_credentials:
+            # User-supplied secrets and tokens are used for this lookup only.
+            return client
+        self.client = client
         self.expires_at = time.monotonic() + max(0, token["expires_in"] - 60)
-        return self.client
+        return client
 
-    def get_user_scores(self, username: str, mode: Ruleset = "mania") -> ScoresResponse:
+    def get_user_scores(
+        self,
+        username: str,
+        mode: Ruleset = "mania",
+        client_id: int | None = None,
+        client_secret: str | None = None,
+    ) -> ScoresResponse:
         try:
             # Check headroom for the whole lookup while the route holds the fetch lock.
-            needed = 2 if self.client and time.monotonic() < self.expires_at else 3
+            has_cached_token = (
+                client_id is None
+                and client_secret is None
+                and self.client is not None
+                and time.monotonic() < self.expires_at
+            )
+            needed = 2 if has_cached_token else 3
             self.limiter.ensure_capacity(needed)
-            api = self.get_ossapi_client()
+            api = (
+                self.get_ossapi_client()
+                if client_id is None and client_secret is None
+                else self.get_ossapi_client(client_id, client_secret)
+            )
             try:
                 user = api.user(username, mode=GameMode(mode))
             except requests.HTTPError as error:

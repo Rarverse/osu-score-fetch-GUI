@@ -12,6 +12,17 @@ const zh = {
   bestPerformance: "最佳表现",
   noLogin: "无需登录",
   publicScores: "公开成绩",
+  ownApi: "使用自己的 osu! API",
+  ownApiDescription:
+    "填写 osu! OAuth 应用的 Client ID 和 Client Secret；本工具使用 client credentials 和 public scope，无需用户授权。仅用此方式时，Callback URL 可留空。留空凭据时使用站点配置。",
+  clientId: "Client ID",
+  clientSecret: "Client Secret",
+  credentialsInMemory:
+    "凭据仅保留在此页面内存中，并通过 HTTPS 发送；关闭或刷新页面后需要重新填写。",
+  createOauth: "在 osu! 创建 OAuth 应用",
+  httpsRequired:
+    "出于安全考虑，自定义凭据仅能通过 HTTPS 使用（localhost 除外）。",
+  invalidCredentials: "请输入有效的 Client ID 和 Client Secret。",
   unableToQuery: "暂时无法查询",
   loadingScores: "正在读取玩家成绩",
   loadingMode: "正在获取 {mode} best performance…",
@@ -50,6 +61,7 @@ const zh = {
   RATE_LIMITED: "查询过于频繁，请稍后重试。",
   UPSTREAM_ERROR: "osu! 服务暂时无法访问，请稍后重试。",
   NOT_CONFIGURED: "服务端尚未配置 osu! OAuth 凭据。",
+  INVALID_CREDENTIALS: "请同时提供有效的 osu! Client ID 和 Client Secret。",
   SERVER_BUSY: "当前查询人数较多，请稍候。",
   UPSTREAM_BUSY: "查询服务正在等待 osu! 请求额度。",
 };
@@ -70,6 +82,17 @@ const en: Record<MessageKey, string> = {
   bestPerformance: "Best performance",
   noLogin: "No sign-in required",
   publicScores: "Public scores",
+  ownApi: "Use my osu! API credentials",
+  ownApiDescription:
+    "Enter the Client ID and Client Secret from your osu! OAuth application. This uses client credentials with the public scope, so user authorization is not needed and the Callback URL can be blank. Leave credentials blank to use the site's configuration.",
+  clientId: "Client ID",
+  clientSecret: "Client Secret",
+  credentialsInMemory:
+    "Credentials stay in this page's memory and are sent over HTTPS. You will need to enter them again after closing or refreshing the page.",
+  createOauth: "Create an osu! OAuth application",
+  httpsRequired:
+    "For security, custom credentials can only be used over HTTPS (except localhost).",
+  invalidCredentials: "Enter a valid Client ID and Client Secret.",
   unableToQuery: "Unable to load scores",
   loadingScores: "Loading player scores",
   loadingMode: "Fetching {mode} best performance…",
@@ -110,6 +133,7 @@ const en: Record<MessageKey, string> = {
   RATE_LIMITED: "Too many searches. Please try again later.",
   UPSTREAM_ERROR: "osu! is temporarily unavailable. Please try again later.",
   NOT_CONFIGURED: "The server has not configured osu! OAuth credentials yet.",
+  INVALID_CREDENTIALS: "Provide both a valid osu! Client ID and Client Secret.",
   SERVER_BUSY: "Too many searches are running. Please wait.",
   UPSTREAM_BUSY: "The service is waiting for osu! request capacity.",
 };

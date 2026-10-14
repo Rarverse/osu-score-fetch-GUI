@@ -36,7 +36,7 @@ npm run dev
 
 打开 http://127.0.0.1:5173。Vite 将 `/api` 和 `/health` 代理到 http://127.0.0.1:8000。API 交互文档：http://127.0.0.1:8000/docs；实时 OpenAPI：http://127.0.0.1:8000/openapi.json。
 
-`.env` 无需前端配置。未配置 OAuth 时 `/health` 仍可用，查询返回 `503 NOT_CONFIGURED`；不返回演示成绩。复制示例之后需填写两项凭据才能查询真实玩家。
+`.env` 无需前端配置。未配置 OAuth 时 `/health` 仍可用，查询返回 `503 NOT_CONFIGURED`；不返回演示成绩。部署者可以配置服务端凭据，也可以让访客在页面中填写自己的凭据。
 
 ## 环境变量与密钥
 
@@ -55,7 +55,9 @@ npm run dev
 | `OSU_REQUESTS_PER_MINUTE` | `60` | 全站向 osu! 发送的 HTTP 请求预算；可设 3–60，超过 60 拒绝启动 |
 | `CORS_ORIGINS` | localhost 与 127.0.0.1 的 5173 端口 | JSON 数组格式的允许来源 |
 
-密钥只由 `apps/api/app/config.py` 读取。OAuth token 仅保留在后端内存，不写入 ossapi 的 pickle 文件。API 响应和前端配置不包含 secret。不要使用 `VITE_` 前缀保存任何密钥；前端无需 OAuth。`.env`、`.cache`、虚拟环境和构建产物均已忽略。
+服务端密钥由 `apps/api/app/config.py` 读取。页面中的可选 Client ID / Client Secret 只保存在当前页面运行内存，查询时通过 HTTPS 请求头发送；关闭或刷新页面后需要重新输入。后端只用这些凭据换取本次查询的 OAuth token，不写入文件或复用为服务端凭据。请勿在非 HTTPS 的公开站点输入 secret；localhost 开发环境例外。OAuth token 不写入 ossapi 的 pickle 文件，API 响应不包含 secret。不要使用 `VITE_` 前缀保存任何密钥。`.env`、`.cache`、虚拟环境和构建产物均已忽略。
+
+用户可在页面展开「使用自己的 osu! API」，从 [osu! 账号设置](https://osu.ppy.sh/home/account/edit) 创建仅需 `public` scope 的 OAuth 应用并填入 Client ID 与 Client Secret。两项凭据必须同时提供；用户凭据只用于缓存 miss 的上游查询。服务端仍对所有凭据共用同一全站 60 次/分钟请求预算、请求间隔、并发锁、缓存和限流，个人凭据不会绕过服务限额。缓存命中返回相同的公开数据，不会再次验证所填凭据。
 
 ## API 契约 v1
 

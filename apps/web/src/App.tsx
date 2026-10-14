@@ -99,6 +99,9 @@ function ScoreRow({ score, position }: { score: Score; position: number }) {
 
 export default function App() {
   const [username, setUsername] = useState("");
+  const [useOwnApi, setUseOwnApi] = useState(false);
+  const [apiClientId, setApiClientId] = useState("");
+  const [apiClientSecret, setApiClientSecret] = useState("");
   const [limit, setLimit] = useState(20);
   const [mode, setMode] = useState<Ruleset>("mania");
   const [loading, setLoading] = useState(false);
@@ -108,6 +111,9 @@ export default function App() {
   const [cache, setCache] = useState("");
   const input = useRef<HTMLInputElement>(null);
   const request = useRef<AbortController | null>(null);
+  const secureContext =
+    window.isSecureContext ||
+    ["localhost", "127.0.0.1", "::1"].includes(location.hostname);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -134,6 +140,20 @@ export default function App() {
   }
 
   async function fetchScores(name: string, selectedMode: Ruleset) {
+    const credentials = useOwnApi
+      ? { clientId: apiClientId.trim(), clientSecret: apiClientSecret.trim() }
+      : undefined;
+    if (
+      credentials &&
+      (!/^\d+$/.test(credentials.clientId) || !credentials.clientSecret)
+    ) {
+      setError(t("invalidCredentials"));
+      return;
+    }
+    if (credentials && !secureContext) {
+      setError(t("httpsRequired"));
+      return;
+    }
     request.current?.abort();
     const controller = new AbortController();
     request.current = controller;
@@ -149,6 +169,7 @@ export default function App() {
             limit,
             selectedMode,
             controller.signal,
+            credentials,
           );
           if (!controller.signal.aborted) {
             setResult(response.data);
@@ -288,6 +309,53 @@ export default function App() {
               </select>
             </div>
           </form>
+          <details className="api-credentials">
+            <summary>{t("ownApi")}</summary>
+            <div className="api-credentials-content">
+              <p>{t("ownApiDescription")}</p>
+              <label className="api-credentials-toggle">
+                <input
+                  type="checkbox"
+                  checked={useOwnApi}
+                  onChange={(event) => setUseOwnApi(event.target.checked)}
+                  disabled={!secureContext}
+                />
+                {t("ownApi")}
+              </label>
+              <label>
+                {t("clientId")}
+                <input
+                  inputMode="numeric"
+                  autoComplete="off"
+                  value={apiClientId}
+                  onChange={(event) => setApiClientId(event.target.value)}
+                  disabled={!useOwnApi}
+                />
+              </label>
+              <label>
+                {t("clientSecret")}
+                <input
+                  type="password"
+                  autoComplete="new-password"
+                  value={apiClientSecret}
+                  onChange={(event) => setApiClientSecret(event.target.value)}
+                  disabled={!useOwnApi}
+                />
+              </label>
+              <p className="api-credentials-note">{t("credentialsInMemory")}</p>
+              {!secureContext && (
+                <p className="api-credentials-note">{t("httpsRequired")}</p>
+              )}
+              <a
+                href="https://osu.ppy.sh/home/account/edit"
+                target="_blank"
+                rel="noreferrer"
+              >
+                {t("createOauth")}
+                <ExternalLink size={12} />
+              </a>
+            </div>
+          </details>
           <div className="search-note">
             <Check size={13} />
             {t("noLogin")}
