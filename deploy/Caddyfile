@@ -1,4 +1,34 @@
-{$SITE_DOMAIN} {
+# Own certificate. No ACME.
+#
+# auto_https off disables both certificate issuance and Caddy's built-in
+# HTTP→HTTPS redirect. That redirect always targets port 443. With a public
+# port such as 4463 the browser would leave the published port.
+# auto_https disable_certs still installs that redirect, so it is not used here.
+#
+# direct (default): listen :443 inside the container and present
+# /certs/fullchain.pem + /certs/privkey.pem. The host publish is
+# ${HTTPS_PORT}:443 (4463:443 on this server). SNI is the hostname only.
+# The Host header may include the public port; the site address stays
+# https://{$SITE_DOMAIN}:443 so Caddy keeps listening on 443.
+#
+# proxy: plain HTTP on container port 80. TLS ends at the host's Nginx/Caddy.
+# Set CADDY_MODE=proxy. This mode does not open the certificate files.
+#
+# A missing or unreadable PEM stops the process. Docker restarts it
+# (unless-stopped), so check `docker compose logs web`. Typical lines:
+#   open /certs/fullchain.pem: no such file or directory
+#   open /certs/privkey.pem: permission denied
+#   tls: private key does not match public key
+{
+	auto_https off
+	# HTTP/3 would advertise alt-svc h3=":443" (the container listen port).
+	# Clients would then try UDP 443 even when the public port is 4463.
+	servers {
+		protocols h1 h2
+	}
+}
+
+(app) {
 	encode gzip
 
 	handle /api/* {
@@ -24,3 +54,26 @@
 		file_server
 	}
 }
+
+(direct) {
+	http://:80 {
+		# PUBLIC_HTTPS_PORT is substituted when Caddy loads this file.
+		# 443 (the default) is omitted so the Location has no explicit port.
+		@nonstandard expression `"{$PUBLIC_HTTPS_PORT:443}" != "443"`
+		redir @nonstandard https://{$SITE_DOMAIN}:{$PUBLIC_HTTPS_PORT:443}{uri} permanent
+		redir https://{$SITE_DOMAIN}{uri} permanent
+	}
+
+	https://{$SITE_DOMAIN}:443 {
+		tls /certs/fullchain.pem /certs/privkey.pem
+		import app
+	}
+}
+
+(proxy) {
+	http://:80 {
+		import app
+	}
+}
+
+import {$CADDY_MODE:direct}

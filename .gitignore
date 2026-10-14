@@ -1,12 +1,15 @@
 .env
 .env.*
 !.env.example
+!.env.deploy.example
 .venv/
 __pycache__/
 *.py[cod]
 .pytest_cache/
 .ruff_cache/
 .cache/
+# Host certificate directory created next to deploy/compose.yaml. Never commit PEMs.
+deploy/certs/
 # Anonymous usage aggregates (hashed counts). Never commit stats output.
 apps/api/data/cache/
 data/cache/
