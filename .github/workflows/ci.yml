@@ -177,8 +177,10 @@ jobs:
       COMPOSE_FILE: ${{ vars.COMPOSE_FILE || 'deploy/compose.yaml' }}
       CADDYFILE: ${{ vars.CADDYFILE || 'deploy/Caddyfile' }}
       DEPLOY_DIR: ${{ vars.DEPLOY_DIR || '/opt/osu-score-api' }}
+      # deploy/compose.yaml does not publish api port 8000. Probe inside that service.
+      # vars.DEPLOY_HEALTH_URL, vars.DEPLOY_HEALTH_MODE, and vars.DEPLOY_API_SERVICE still override.
       HEALTH_URL: ${{ vars.DEPLOY_HEALTH_URL || 'http://127.0.0.1:8000/health' }}
-      HEALTH_MODE: ${{ vars.DEPLOY_HEALTH_MODE || 'host' }}
+      HEALTH_MODE: ${{ vars.DEPLOY_HEALTH_MODE || 'exec' }}
       API_SERVICE: ${{ vars.DEPLOY_API_SERVICE || 'api' }}
       SITE_URL: ${{ vars.SITE_URL }}
     steps:
@@ -377,8 +379,11 @@ jobs:
           for _ in $(seq 1 30); do
             code="000"
             if [ "$mode" = "exec" ]; then
+              # The api image is python slim and has no curl. Same urllib probe as its HEALTHCHECK.
+              # A non-2xx response or a connection error exits before print, so code stays empty.
               code=$(docker compose --env-file .env.deploy -f compose.yaml exec -T "$service" \
-                curl -sS -o /dev/null -w '%{http_code}' --max-time 5 "$url" || true)
+                python -c 'import sys,urllib.request; print(urllib.request.urlopen(sys.argv[1], timeout=5).status)' \
+                "$url" || true)
             else
               code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 "$url" || true)
             fi
