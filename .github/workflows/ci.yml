@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  web:
+    name: web
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck --workspace apps/web
+
+      - name: Lint
+        run: npm run lint --workspace apps/web
+
+      - name: Build
+        run: npm run build --workspace apps/web
+
+  api:
+    name: api
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v10.3.0
+        with:
+          enable-cache: true
+          python-version: "3.12"
+          cache-dependency-glob: |
+            apps/api/pyproject.toml
+            apps/api/uv.lock
+
+      - name: Install dependencies
+        run: uv sync
+
+      # OSU_CLIENT_ID and OSU_CLIENT_SECRET stay unset. No secrets.
+      # test_api_error_contract expects NOT_CONFIGURED and fails if either is set.
+      - name: Test
+        run: env -u OSU_CLIENT_ID -u OSU_CLIENT_SECRET uv run pytest
