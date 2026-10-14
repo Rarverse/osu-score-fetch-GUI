@@ -1,17 +1,16 @@
 # TLS terminates here. The score site is plain HTTP on loopback.
+# SafeLine (雷池) does this job on the real server; this file is the same shape
+# for a host Nginx. compose.yaml publishes no host HTTPS port unless
+# COMPOSE_PROFILES=direct:
 #
-# /opt/osu-score-api/.env.deploy:
 #   CADDY_MODE=proxy
 #   BIND_ADDR=127.0.0.1
 #   HTTP_PORT=8080
-#   HTTPS_PORT=8443
 #
-# HTTPS_PORT is a placeholder. compose.yaml always publishes container port
-# 443, and proxy mode does not listen on it. Do not set HTTPS_PORT=443 while
-# this server block owns host port 443.
-#
-# Forward `/` and keep the forwarding headers. The inner Caddy routes
-# /api and /health; do not strip them here.
+# Forward `/` unchanged. $proxy_add_x_forwarded_for keeps a client-supplied
+# X-Forwarded-For and appends the address Nginx actually saw. Caddy trusts
+# only the docker bridge gateway, then walks that list from the right, so a
+# spoofed address to the left is not the visitor IP.
 
 upstream osu_score_web {
     server 127.0.0.1:8080;

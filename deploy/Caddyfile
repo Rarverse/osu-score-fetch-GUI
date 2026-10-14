@@ -1,43 +1,42 @@
-# Own certificate. No ACME.
+# Own certificate in direct mode. No ACME.
 #
-# auto_https off disables both certificate issuance and Caddy's built-in
-# HTTP→HTTPS redirect. That redirect always targets port 443. With a public
-# port such as 4463 the browser would leave the published port.
+# auto_https off disables certificate issuance and Caddy's built-in
+# HTTP→HTTPS redirect. That redirect always targets port 443.
 # auto_https disable_certs still installs that redirect, so it is not used here.
 #
 # direct (default): listen :443 inside the container and present
 # /certs/fullchain.pem + /certs/privkey.pem. The host publish is
-# ${HTTPS_PORT}:443 (4463:443 on this server). SNI is the hostname only.
-# The Host header may include the public port; the site address stays
-# https://{$SITE_DOMAIN}:443 so Caddy keeps listening on 443.
+# ${HTTPS_PORT}:443. SNI is the hostname only. The Host header may include
+# the public port; the site address stays https://{$SITE_DOMAIN}:443.
 #
-# proxy: plain HTTP on container port 80. TLS ends at the host's Nginx/Caddy.
-# Set CADDY_MODE=proxy. This mode does not open the certificate files.
+# proxy: plain HTTP on container port 80. TLS ends at SafeLine, Nginx, or
+# another Caddy on the host. Set CADDY_MODE=proxy and do not set
+# COMPOSE_PROFILES=direct, so compose does not publish a host HTTPS port.
+# This mode does not open certificate files. It does not redirect HTTP to HTTPS.
 #
-# A missing or unreadable PEM stops the process. Docker restarts it
-# (unless-stopped), so check `docker compose logs web`. Typical lines:
+# On :80 only, the peer is trusted when it is in TRUSTED_PROXIES (the docker
+# bridge gateway, and loopback). X-Forwarded-For is then walked from the right
+# and the resolved address is what the API receives. :443 does not trust
+# forwarded headers. A missing or unreadable PEM in direct mode stops the
+# process. Docker restarts it (unless-stopped). Check `docker compose logs web`:
 #   open /certs/fullchain.pem: no such file or directory
 #   open /certs/privkey.pem: permission denied
 #   tls: private key does not match public key
 {
 	auto_https off
 	# HTTP/3 would advertise alt-svc h3=":443" (the container listen port).
-	# Clients would then try UDP 443 even when the public port is 4463.
-	servers {
+	servers :443 {
 		protocols h1 h2
+	}
+	servers :80 {
+		protocols h1 h2
+		trusted_proxies static {$TRUSTED_PROXIES:127.0.0.1 172.31.210.1}
+		client_ip_headers X-Forwarded-For
 	}
 }
 
-(app) {
+(static) {
 	encode gzip
-
-	handle /api/* {
-		reverse_proxy api:8000
-	}
-
-	handle /health {
-		reverse_proxy api:8000
-	}
 
 	@assets path /assets/*
 	header @assets Cache-Control "public, max-age=31536000, immutable"
@@ -55,6 +54,34 @@
 	}
 }
 
+(api) {
+	handle /api/* {
+		reverse_proxy api:8000
+	}
+
+	handle /health {
+		reverse_proxy api:8000
+	}
+}
+
+(api_proxy) {
+	handle /api/* {
+		reverse_proxy api:8000 {
+			header_up X-Forwarded-For {http.vars.client_ip}
+			header_up X-Real-IP {http.vars.client_ip}
+			header_up X-Forwarded-Proto {http.request.header.X-Forwarded-Proto}
+		}
+	}
+
+	handle /health {
+		reverse_proxy api:8000 {
+			header_up X-Forwarded-For {http.vars.client_ip}
+			header_up X-Real-IP {http.vars.client_ip}
+			header_up X-Forwarded-Proto {http.request.header.X-Forwarded-Proto}
+		}
+	}
+}
+
 (direct) {
 	http://:80 {
 		# PUBLIC_HTTPS_PORT is substituted when Caddy loads this file.
@@ -66,13 +93,15 @@
 
 	https://{$SITE_DOMAIN}:443 {
 		tls /certs/fullchain.pem /certs/privkey.pem
-		import app
+		import api
+		import static
 	}
 }
 
 (proxy) {
 	http://:80 {
-		import app
+		import api_proxy
+		import static
 	}
 }
 

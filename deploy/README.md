@@ -2,7 +2,9 @@
 
 面向一台自己的 Debian 机器。API 只在 Compose 网络里监听 `8000`，不对宿主机发布端口。web 容器里的 Caddy 反代 `/api` 和 `/health`，并托管前端静态文件。
 
-默认由这只 Caddy 终止 TLS，证书是你自己的 PEM，不申请 ACME 证书。宿主机端口和绑定地址写在 `/opt/osu-score-api/.env.deploy`。不写时 Compose 使用 `80` 和 `443`。当前这台机器是 `1221` 和 `4463`，写在 `deploy/.env.deploy.example` 里，不写进 `compose.yaml` 的默认值。
+这台机器上雷池（SafeLine）已经占用宿主机 `80`/`443` 并终止 TLS，Portainer 也在管 Docker。推荐 `CADDY_MODE=proxy`：web 只绑 `127.0.0.1:${HTTP_PORT}`，不发布 `443`，也不挂证书目录。公网地址是 `https://scores.rarverse.com`，没有端口。自己终止 TLS 时才用 `direct`，端口例子是 `1221`/`4463`，写在 `deploy/.env.deploy.example` 的注释里，不写进 `compose.yaml` 的默认值。
+
+Compose 项目名固定为 `osu-score-api`（文件里的 `name:`）。在 `/opt/osu-score-api` 里执行和在 Portainer 里用同名 stack，看到的是同一组容器和卷 `osu-data`。
 
 镜像：
 
@@ -62,29 +64,34 @@ sudo cp deploy/.env.deploy.example /opt/osu-score-api/.env.deploy
 sudoedit /opt/osu-score-api/.env.deploy
 ```
 
-已经在跑的机器不要整文件覆盖。部署任务每次只改写 `.env.deploy` 里的 `IMAGE_TAG` 一行，其余行会留下。把下面的变量补进现有文件；缺了的话，下一次部署会回到 Compose 默认的 `80` / `443`。
+已经在跑的机器不要整文件覆盖。部署任务每次只改写 `.env.deploy` 里的 `IMAGE_TAG` 一行，其余行会留下。把下面的变量补进现有文件。雷池这台机器不要设置 `COMPOSE_PROFILES=direct`。写了这一行会多启动 `https-publish`，把 `HTTPS_PORT`（默认 443）绑到宿主机上。删掉这一行或留空，宿主机就不发布 HTTPS 端口。
 
 `.env.deploy` 没有 osu! 密钥：
 
 | 变量 | 作用 |
 | --- | --- |
 | `IMAGE_TAG` | 要运行的 GHCR 镜像标签。部署任务会改写这一行 |
-| `CADDY_MODE` | `direct`（默认，自己的证书）或 `proxy`（前面已有反代） |
-| `BIND_ADDR` | 宿主机绑定的 IPv4 地址，默认 `0.0.0.0`。只给本机反代时用 `127.0.0.1` |
-| `HTTP_PORT` | 宿主机 HTTP 端口，映射到容器 `80`。默认 `80`。这台机器是 `1221` |
-| `HTTPS_PORT` | 宿主机 HTTPS 端口，映射到容器 `443`。默认 `443`。这台机器是 `4463` |
-| `PUBLIC_HTTPS_PORT` | 写进 HTTP 跳转地址的公网端口。不填时等于 `HTTPS_PORT`；两者都不填则是 `443`。值为 `443` 时跳转里不写端口 |
-| `SITE_DOMAIN` | 主机名，不含 `https://` 和端口。证书的 SAN 要包含它 |
-| `TLS_CERT_DIR` | 宿主机证书目录，只读挂到容器 `/certs`。示例是 `/opt/osu-score-api/certs` |
+| `CADDY_MODE` | `proxy`（雷池或别的反代终止 TLS）或 `direct`（这只 Caddy 用你的 PEM） |
+| `BIND_ADDR` | 宿主机绑定的 IPv4 地址。雷池前面用 `127.0.0.1`。默认 `0.0.0.0` |
+| `HTTP_PORT` | 宿主机 HTTP 端口，映射到容器 `80`。雷池上游用这个端口，示例 `8080` |
+| `HTTPS_PORT` | `direct` 模式的宿主机 HTTPS 端口。默认 `443`。自建端口例子是 `4463`。只在 `COMPOSE_PROFILES=direct` 时由服务 `https-publish` 发布 |
+| `COMPOSE_PROFILES` | 设为 `direct` 才发布 `HTTPS_PORT`。雷池前面不要设，或留空 |
+| `PUBLIC_HTTPS_PORT` | `direct` 模式写进 HTTP 跳转地址的公网端口。不填时等于 `HTTPS_PORT`。`HTTPS_PORT` 也没有填时是 `443`。值为 `443` 时跳转里不写端口 |
+| `TLS_CERT_DIR` | `direct` 模式的宿主机证书目录，挂到容器 `/certs`。不填时挂的是命名卷 `caddy-config`，里面没有 PEM |
+| `SITE_DOMAIN` | 主机名，不含 `https://` 和端口 |
+| `COMPOSE_SUBNET` / `COMPOSE_GATEWAY` | 本项目网络。默认 `172.31.210.0/24` 和 `172.31.210.1` |
+| `WEB_IPV4` | web 容器地址，默认 `172.31.210.10`。API 只信任这个地址上的 `X-Forwarded-For` |
+| `TRUSTED_PROXIES` | Caddy 在容器 `80` 上信任的对端，默认 `127.0.0.1` 和网关。不要写成整个公网 |
+| `FORWARDED_ALLOW_IPS` | 传给 uvicorn `--forwarded-allow-ips`，与 `WEB_IPV4` 相同 |
 | `VITE_SITE_URL` | 只在**本机** `docker compose build` 时写入 `og:image` / `og:url` |
 
-GitHub 上的部署流水线构建 web 镜像时用的是仓库变量 **`SITE_URL`**，不是 `.env.deploy` 里的 `VITE_SITE_URL`。这台机器的 `SITE_URL` 必须是：
+GitHub 上的部署流水线构建 web 镜像时用的是仓库变量 **`SITE_URL`**，不是 `.env.deploy` 里的 `VITE_SITE_URL`。雷池这台机器的 `SITE_URL` 是：
 
 ```text
-https://scores.rarverse.com:4463
+https://scores.rarverse.com
 ```
 
-少了 `:4463` 时，页面里的 `og:url` 和 `og:image` 会指向 443。分享卡片的抓取程序经常打不开非 443 端口。在统计访问之前，先把宿主机的 `443` 直接公布出去（`HTTPS_PORT=443`，安全组放行 443），或者在前面放 Nginx、Caddy、Cloudflare，让公网仍然使用 443。非 443 上的失败抓取不能用来判断有没有人打开站点。
+改完仓库变量后要发布新的 web 镜像。部署任务会把新的 git sha 写成 `IMAGE_TAG`。只改 `.env.deploy` 里的 `VITE_SITE_URL` 不会改掉已经打进镜像的地址。自己用 `1221`/`4463` 终止 TLS、没有雷池时，`SITE_URL` 要带端口：`https://scores.rarverse.com:4463`。分享卡片的抓取程序经常打不开非 443 端口。
 
 `VITE_SITE_URL` 在构建时写进 `index.html`。只 `pull` 已有镜像不会改掉已经打进去的地址。
 
@@ -153,7 +160,7 @@ docker compose --env-file .env.deploy -f compose.yaml pull
 docker compose --env-file .env.deploy -f compose.yaml up -d
 ```
 
-API 容器入口先准备数据目录，再以降权用户 `osu`（uid 10001）启动 **一个** uvicorn worker。进程监听 `0.0.0.0:8000`，但 Compose 没有把该端口映射到宿主机。Caddy 通过服务名 `api:8000` 访问它。`direct` 模式下 Caddy 在容器内监听 `80` 和 `443`；`proxy` 模式只监听 `80`。宿主机上看到的是 `HTTP_PORT` 和 `HTTPS_PORT`。
+API 容器入口先准备数据目录，再以降权用户 `osu`（uid 10001）启动 **一个** uvicorn worker。进程监听 `0.0.0.0:8000`，但 Compose 没有把该端口映射到宿主机。Caddy 通过服务名 `api:8000` 访问它。`direct` 模式下 Caddy 在容器内监听 `80` 和 `443`；`proxy` 模式只监听 `80`。宿主机上 `web` 只发布 `HTTP_PORT`。`HTTPS_PORT` 由 `https-publish` 发布，而且只有 `.env.deploy` 里写了 `COMPOSE_PROFILES=direct` 时这个容器才会起来。`https-publish` 使用 API 镜像，`docker ps` 里的 `8000/tcp` 只是镜像声明，没有映射到宿主机。`web` 那一行的 `443/tcp` 同样只是声明；雷池模式下宿主机不听 `443`。
 
 Caddy 只启用 HTTP/1.1 和 HTTP/2。HTTP/3 的 `alt-svc` 会公布容器内的 `:443`，浏览器会去连公网 UDP 443，而映射出去的端口是 `HTTPS_PORT`（这台机器是 4463）。
 
@@ -187,7 +194,7 @@ curl -vk --resolve "scores.rarverse.com:${HTTPS_PORT}:127.0.0.1" "https://scores
 按这个顺序看，停在第一个失败的地方：
 
 1. `docker compose ps`：web 不是 `Up` 就先看 `logs web`。
-2. `ss -lntp`：应能看到宿主机在听 `HTTP_PORT` 和 `HTTPS_PORT`（常见进程名是 `docker-proxy`）。只看到 `80` / `443`、看不到 `1221` / `4463`，说明 `.env.deploy` 里没有这两项，或改完后没有 `up -d`。
+2. `ss -lntp`：`direct` 模式应能看到宿主机在听 `HTTP_PORT` 和 `HTTPS_PORT`（常见进程名是 `docker-proxy`）。只看到 `80` / `443`、看不到 `1221` / `4463`，说明 `.env.deploy` 里没有这两项，或没有 `COMPOSE_PROFILES=direct`，或改完后没有 `up -d`。雷池模式只应看到 `127.0.0.1` 上的 `HTTP_PORT`，`443` 属于雷池。
 3. 上面的两条 `curl`。本机 HTTP 都失败，是容器没在听。本机 HTTPS 成功、公网失败，继续看防火墙和 DNS。
 4. `sudo ufw status verbose`。ufw 处于 active 时放行实际端口，例如 `sudo ufw allow 1221/tcp` 和 `sudo ufw allow 4463/tcp`。
 5. `sudo iptables -L INPUT -n -v` 或 `sudo nft list ruleset`。默认丢弃时要允许 TCP `HTTP_PORT` 和 `HTTPS_PORT`。
@@ -203,28 +210,25 @@ openssl pkey -in /opt/osu-score-api/certs/privkey.pem -pubout | openssl sha256
 
 后两行的摘要必须相同。
 
-## 6. 前面已经有 Nginx 或 Caddy
+## 6. 前面已经有 Nginx、Caddy 或雷池
 
-Immich 的 Compose 默认公布 HTTP `2283`，TLS 放在反代上，并要求反代转发 `Host`、`X-Forwarded-For`、`X-Forwarded-Proto`。Vaultwarden 的常见示例只绑定 `127.0.0.1:8080:80`，公网 URL 写在 `DOMAIN`。那边都是应用只出 HTTP。
+Immich 的 Compose 默认公布 HTTP `2283`，TLS 放在反代上，并要求反代转发 `Host`、`X-Forwarded-For`、`X-Forwarded-Proto`。Vaultwarden 的常见示例只绑定 `127.0.0.1:8080:80`，公网 URL 写在 `DOMAIN`。那边都是应用只出 HTTP。雷池这台机器用同一形状：`CADDY_MODE=proxy`。
 
-这台机器已经有证书、也不走 ACME，所以默认是 `CADDY_MODE=direct`：证书挂进 web 容器。宿主机上已经有 Nginx 或 Caddy 占着 `443` 时改用 `proxy`，这时和那两个项目一样，TLS 在门口结束。
-
-`.env.deploy`：
+`.env.deploy` 里和端口有关的行：
 
 ```text
 CADDY_MODE=proxy
 BIND_ADDR=127.0.0.1
 HTTP_PORT=8080
-HTTPS_PORT=8443
 ```
 
-`compose.yaml` 始终会发布容器的 `443`。`proxy` 模式下 Caddy 不监听 `443`，也不打开 `/certs`。`HTTPS_PORT` 不要设成 `443`，否则会和门口的反代抢端口；`8443` 只绑在 `127.0.0.1` 上，没有进程接受连接。反代的上游是 `127.0.0.1:8080`。
+不要写 `COMPOSE_PROFILES=direct`。不写这一行时 Compose 不映射 HTTPS 端口，宿主机的 `443` 留给雷池。Caddy 只听容器内的 `80`，不读证书，也不把 HTTP 跳到 HTTPS。改完后 `up -d`。本机 `curl -sS -D - -o /dev/null http://127.0.0.1:8080/health` 的状态应是 `200`，不是 `301`。`/health` 只接受 GET，`curl -I` 会得到 `405`。
 
-改完后 `up -d`。本机 `curl -I http://127.0.0.1:8080/health` 的状态应是 `200`。`proxy` 模式不对 HTTP 做跳转。
+`ss -lntp` 里 web 的端口应只出现在 `127.0.0.1:8080`，不应出现在 `0.0.0.0:8080` 或 `443`。
 
-Nginx 示例是 `deploy/nginx.conf.example`：`location /` 原样转发，并保留 `Host`、`X-Real-IP`、`X-Forwarded-For`、`X-Forwarded-Proto`、`X-Forwarded-Host`。不要在 Nginx 里去掉 `/api` 或 `/health`。
+Nginx 示例是 `deploy/nginx.conf.example`：`location /` 原样转发，并设置 `Host`、`X-Real-IP`、`X-Forwarded-For`、`X-Forwarded-Proto`、`X-Forwarded-Host`。不要在反代里去掉 `/api` 或 `/health`。
 
-门口如果也是 Caddy，由它申请或使用证书，再反代到本机 HTTP：
+门口如果也是 Caddy，由它使用证书，再反代到本机 HTTP。它自己会设置 `X-Forwarded-For`、`X-Forwarded-Proto` 和 `X-Forwarded-Host`：
 
 ```caddy
 scores.rarverse.com {
@@ -232,7 +236,54 @@ scores.rarverse.com {
 }
 ```
 
-Caddy 的 `reverse_proxy` 会自己设置 `X-Forwarded-For`、`X-Forwarded-Proto` 和 `X-Forwarded-Host`。
+访问路径是：访客 → 雷池（宿主机 `443`）→ 发布在 `127.0.0.1:8080` 的 Caddy。Caddy 在容器里看到的对端是 Docker 网关（默认 `172.31.210.1`），不是访客。`TRUSTED_PROXIES` 只包含这个网关和 `127.0.0.1`。Caddy 从 `X-Forwarded-For` 右侧取第一个不受信任的地址，再只把这个地址传给 API。API 的 uvicorn 使用 `--proxy-headers --forwarded-allow-ips`，允许的地址只有 web 容器（默认 `172.31.210.10`）。别人直接连 API 时带上的 `X-Forwarded-For` 不算数。每个 IP 每分钟 20 次查询。
+
+自己终止 TLS（`COMPOSE_PROFILES=direct`）时，宿主机的 `HTTPS_PORT` 由 `https-publish` 转到 `web` 里的 Caddy。这一跳里 Caddy 看到的是转发容器，不是每个访客。要按访客地址限流，用上面的雷池路径。
+
+## Behind SafeLine/雷池
+
+在雷池里为 `scores.rarverse.com` 加站点：
+
+1. 上游协议选 HTTP，地址填 `127.0.0.1`，端口填 `.env.deploy` 的 `HTTP_PORT`（示例 `8080`）。上游不要带路径，雷池不会把路径写进反代。
+2. 证书放在雷池上。`.env.deploy` 不要设 `COMPOSE_PROFILES=direct`，也不要设 `TLS_CERT_DIR`。这个栈不占用宿主机 `443`，也不读 PEM。
+3. 让雷池把真实访客地址放进 `X-Forwarded-For`，并把 `X-Forwarded-Proto` 设为 `https`。源 IP 用雷池自己看到的连接地址，不要改成信任访客带来的 header。
+4. 人机验证会挡住分享卡片。给这个站点加白名单，放行路径 `/`、`/index.html`、`/og.png`、`/og.svg`。微信的预览请求经常没有稳定的爬虫 UA，只放行 UA 不够。再按请求头 User-Agent 放行 `Discordbot` 和 `Twitterbot`，避免 Discord 和 X 的抓取被挑战页截住。白名单是「放行」，多条规则各自独立；一条规则里的多个条件是同时满足。
+5. 仓库变量 `SITE_URL` 设为 `https://scores.rarverse.com`（没有端口）。然后让部署任务打出新的 web 镜像，或自己用这个地址构建后把新的 `IMAGE_TAG` 写进 `.env.deploy` 再 `up -d`。旧镜像里的 `og:url` 不会跟着变。
+
+部署健康检查要穿过雷池，打到公网地址。在 GitHub 仓库变量里设置：
+
+```text
+DEPLOY_HEALTH_MODE=host
+DEPLOY_HEALTH_URL=https://scores.rarverse.com/health
+```
+
+`host` 表示在服务器上用 curl 请求这个 URL。不要把检查改回 `http://127.0.0.1:8000/health`：API 的 `8000` 没有映射到宿主机。
+
+本机确认：
+
+```sh
+curl -sS -D - -o /dev/null http://127.0.0.1:8080/health
+curl -fsS https://scores.rarverse.com/health
+ss -lntp
+```
+
+第一条应是 `200`，不是跳转到 https。第二条走雷池，也应是 `200`。`ss` 里 `443` 属于雷池，`8080` 只在 `127.0.0.1`。
+
+## Portainer
+
+选一个主人，不要两个一起改同一组容器。
+
+**GitHub Actions 部署。** 仓库变量 `DEPLOY_ENABLED=true` 时，推 main 会覆盖服务器上的 `compose.yaml` 和 `Caddyfile`，并只改 `.env.deploy` 的 `IMAGE_TAG`。Portainer 只用来看容器和日志。不要在 Portainer 里编辑这个 stack、改环境变量或重新部署，否则下一次 Actions 会把改动盖掉，两边还会抢同一个项目名。
+
+**Portainer 部署。** 把仓库变量 `DEPLOY_ENABLED` 设为 `false`（或不设成 `true`），让 Actions 不再连这台机器。然后：
+
+1. 在服务器上放好 `/etc/osu-score-api/env` 和 `/opt/osu-score-api/.env.deploy`（雷池那一组变量）。
+2. Portainer → Stacks → Add stack。名称填 `osu-score-api`，与 compose 文件里的 `name:` 一致。
+3. Web editor 粘贴 `deploy/compose.yaml`。环境变量用 `.env.deploy` 里的键，不要另起一个项目名。雷池这台机器不要加 `COMPOSE_PROFILES`。自己终止 TLS 时才把 `COMPOSE_PROFILES` 设为 `direct`，Portainer 会把它传给 Compose，从而启动 `https-publish`。
+4. 镜像若是私有的，在 Portainer 里登记 ghcr.io 的只读凭据。
+5. Deploy the stack。之后改端口或 `CADDY_MODE` 只在这一处改，再 Update the stack。
+
+`name: osu-score-api` 固定项目名。无论当前目录是仓库的 `deploy/` 还是 `/opt/osu-score-api`，`docker compose ps` 和 Portainer 列出的都是 `osu-score-api` 这一组。卷名是 `osu-score-api_osu-data`。不要 `down -v`。
 
 ## 7. 回滚
 
@@ -270,7 +321,7 @@ docker compose --env-file /opt/osu-score-api/.env.deploy -f deploy/compose.yaml 
 
 下次写入缓存时服务会重新创建该目录。不要删除 `/var/lib/osu-score-api/stats`。
 
-公网端口不是 443 时，先不要用这份统计判断站点有没有人用。分享卡片的抓取常常连不上 `https://主机:4463/og.png`，抓取失败不会记成一次成功的查询。先让 `443` 或前面的反代通了，再看 `usage.json`。
+雷池把 `443` 和证书接好、并且 `/og.png` 与首页能被抓取之后，再看 `usage.json`。人机验证挡住的分享卡片不会记成一次成功查询。自己用非 443 端口终止 TLS 时，抓取程序也经常打不开 `og:image`。
 
 ## 构建时的依赖约束
 

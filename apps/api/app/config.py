@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     rate_limit_per_player: int = Field(default=10, ge=1)
     osu_requests_per_minute: int = Field(default=60, ge=3, le=60)
     cors_origins: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
+    # Comma-separated IPs or CIDRs that may set X-Forwarded-For. Compose sets
+    # this to the web container address. Do not use "*".
+    forwarded_allow_ips: str = "127.0.0.1"
 
     @model_validator(mode="after")
     def validate_cache_retention(self):
