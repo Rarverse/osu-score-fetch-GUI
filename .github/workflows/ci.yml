@@ -52,5 +52,7 @@ jobs:
       - name: Install dependencies
         run: uv sync
 
+      # OSU_CLIENT_ID and OSU_CLIENT_SECRET stay unset. No secrets.
+      # test_api_error_contract expects NOT_CONFIGURED and fails if either is set.
       - name: Test
-        run: uv run pytest
+        run: env -u OSU_CLIENT_ID -u OSU_CLIENT_SECRET uv run pytest
