@@ -7,6 +7,32 @@ interface CachedScores {
 }
 
 const cache = new Map<string, CachedScores>();
+const VISITOR_STORAGE_KEY = "rarsu-visitor-id";
+let memoryVisitorId = "";
+
+function readStoredVisitorId(): string {
+  if (memoryVisitorId) return memoryVisitorId;
+  try {
+    const stored = localStorage.getItem(VISITOR_STORAGE_KEY);
+    if (stored && /^[0-9a-f-]{36}$/i.test(stored)) return stored;
+  } catch {
+    return "";
+  }
+  return "";
+}
+
+function visitorId(): string {
+  const existing = readStoredVisitorId();
+  if (existing) return existing;
+  const created = crypto.randomUUID();
+  memoryVisitorId = created;
+  try {
+    localStorage.setItem(VISITOR_STORAGE_KEY, created);
+  } catch {
+    // Private mode can reject storage. The page still sends this in-memory id.
+  }
+  return created;
+}
 
 function cacheKey(username: string, mode: Ruleset, limit: number): string {
   const name = username.trim().toLowerCase();
@@ -66,6 +92,7 @@ export async function getScores(
   const cached = cache.get(key);
   if (cached) return { data: cached.data, cache: "MEMORY" };
   const headers = new Headers();
+  headers.set("X-Visitor-Id", visitorId());
   if (credentials) {
     headers.set("X-Osu-Client-Id", credentials.clientId);
     headers.set("X-Osu-Client-Secret", credentials.clientSecret);
