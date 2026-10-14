@@ -1,0 +1,40 @@
+# Host ports: web publishes 80 and 443 only. The API stays on the compose network.
+services:
+  api:
+    image: ghcr.io/rarverse/osu-score-fetch-gui-api:${IMAGE_TAG:?set IMAGE_TAG}
+    build:
+      context: ../apps/api
+      dockerfile: Dockerfile
+    env_file:
+      - /etc/osu-score-api/env
+    environment:
+      CACHE_PATH: /var/lib/osu-score-api/cache
+      STATS_PATH: /var/lib/osu-score-api/stats/usage.json
+    volumes:
+      - osu-data:/var/lib/osu-score-api
+    restart: unless-stopped
+
+  web:
+    image: ghcr.io/rarverse/osu-score-fetch-gui-web:${IMAGE_TAG:?set IMAGE_TAG}
+    build:
+      context: ..
+      dockerfile: apps/web/Dockerfile
+      args:
+        VITE_SITE_URL: ${VITE_SITE_URL:-}
+    environment:
+      SITE_DOMAIN: ${SITE_DOMAIN:?set SITE_DOMAIN}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  osu-data:
+  caddy-data:
+  caddy-config:
