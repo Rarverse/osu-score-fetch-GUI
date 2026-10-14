@@ -2,13 +2,9 @@
 # manage the same containers and the osu-data volume.
 name: osu-score-api
 
-# Ports and the bind address come from .env.deploy. Do not put a one-off pair
-# such as 1221/4463 here: the deploy job overwrites this file and only
-# preserves .env.deploy.
-#
-# web publishes HTTP only. Host 443 is not published unless COMPOSE_PROFILES
-# includes `direct` (see https-publish). SafeLine keeps 443 when that profile
-# is off. Compose applies COMPOSE_PROFILES from --env-file.
+# One HTTP port. HTTPS is the reverse proxy on the host. Defaults are
+# 127.0.0.1:8080 so this stack does not take host port 80 or 443.
+# The deploy job overwrites this file and only preserves .env.deploy.
 services:
   api:
     image: ghcr.io/rarverse/osu-score-fetch-gui-api:${IMAGE_TAG:?set IMAGE_TAG}
@@ -48,93 +44,15 @@ services:
       args:
         VITE_SITE_URL: ${VITE_SITE_URL:-}
     environment:
-      SITE_DOMAIN: ${SITE_DOMAIN:?set SITE_DOMAIN}
-      # Public port written into the HTTP→HTTPS Location. Defaults to the
-      # published HTTPS_PORT, then 443. Caddy omits the port when it is 443.
-      PUBLIC_HTTPS_PORT: ${PUBLIC_HTTPS_PORT:-${HTTPS_PORT:-443}}
-      CADDY_MODE: ${CADDY_MODE:-direct}
       TRUSTED_PROXIES: ${TRUSTED_PROXIES:-127.0.0.1 ${COMPOSE_GATEWAY:-172.31.210.1}}
     ports:
-      - "${BIND_ADDR:-0.0.0.0}:${HTTP_PORT:-80}:80"
-    volumes:
-      - caddy-data:/data
-      - caddy-config:/config
-      # Proxy mode leaves TLS_CERT_DIR unset and mounts the named volume.
-      # That volume is not a certificate store. Direct mode sets TLS_CERT_DIR
-      # to the host directory that holds fullchain.pem and privkey.pem.
-      - ${TLS_CERT_DIR:-caddy-config}:/certs:ro
+      - "${BIND_ADDR:-127.0.0.1}:${HTTP_PORT:-8080}:80"
     networks:
       backend:
         ipv4_address: ${WEB_IPV4:-172.31.210.10}
     depends_on:
       api:
         condition: service_healthy
-    restart: unless-stopped
-
-  # Direct mode only. Started when .env.deploy contains COMPOSE_PROFILES=direct.
-  # Forwards the published HTTPS port to Caddy's container port 443 without
-  # publishing 443 from `web`. Proxy mode leaves the profile unset, so this
-  # container does not exist and host 443 stays free.
-  https-publish:
-    profiles: ["direct"]
-    image: ghcr.io/rarverse/osu-score-fetch-gui-api:${IMAGE_TAG:?set IMAGE_TAG}
-    entrypoint: ["python", "-c"]
-    command:
-      - |
-        import os, select, socket, threading
-
-        def pipe(left, right):
-            socks = [left, right]
-            try:
-                while socks:
-                    ready, _, _ = select.select(socks, [], [])
-                    for src in ready:
-                        if src not in socks:
-                            continue
-                        dst = right if src is left else left
-                        data = src.recv(65536)
-                        if not data:
-                            socks.remove(src)
-                            try:
-                                dst.shutdown(socket.SHUT_WR)
-                            except OSError:
-                                pass
-                            continue
-                        dst.sendall(data)
-            finally:
-                for item in (left, right):
-                    try:
-                        item.close()
-                    except OSError:
-                        pass
-
-        def serve():
-            server = socket.socket()
-            server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            server.bind(("0.0.0.0", 8443))
-            server.listen(128)
-            host = os.environ.get("WEB_HOST", "web")
-            while True:
-                client, _ = server.accept()
-                try:
-                    upstream = socket.create_connection((host, 443), 10)
-                except OSError:
-                    client.close()
-                    continue
-                threading.Thread(target=pipe, args=(client, upstream), daemon=True).start()
-
-        serve()
-    environment:
-      WEB_HOST: web
-    ports:
-      - "${BIND_ADDR:-0.0.0.0}:${HTTPS_PORT:-443}:8443"
-    networks:
-      - backend
-    depends_on:
-      web:
-        condition: service_started
-    healthcheck:
-      disable: true
     restart: unless-stopped
 
 networks:
@@ -146,5 +64,3 @@ networks:
 
 volumes:
   osu-data:
-  caddy-data:
-  caddy-config:

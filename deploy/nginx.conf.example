@@ -1,16 +1,13 @@
-# TLS terminates here. The score site is plain HTTP on loopback.
-# SafeLine (雷池) does this job on the real server; this file is the same shape
-# for a host Nginx. compose.yaml publishes no host HTTPS port unless
-# COMPOSE_PROFILES=direct:
+# HTTPS is this Nginx's job. The score site is plain HTTP on loopback:
 #
-#   CADDY_MODE=proxy
 #   BIND_ADDR=127.0.0.1
 #   HTTP_PORT=8080
 #
-# Forward `/` unchanged. $proxy_add_x_forwarded_for keeps a client-supplied
-# X-Forwarded-For and appends the address Nginx actually saw. Caddy trusts
-# only the docker bridge gateway, then walks that list from the right, so a
-# spoofed address to the left is not the visitor IP.
+# The ssl_certificate lines are placeholders. Point them at files you manage
+# outside this repository. Forward `/` unchanged. $proxy_add_x_forwarded_for
+# keeps a client-supplied X-Forwarded-For and appends the address Nginx
+# actually saw. Caddy trusts only the docker bridge gateway, then walks that
+# list from the right, so a spoofed address to the left is not the visitor IP.
 
 upstream osu_score_web {
     server 127.0.0.1:8080;
@@ -28,8 +25,8 @@ server {
     listen [::]:443 ssl;
     server_name scores.rarverse.com;
 
-    ssl_certificate     /etc/ssl/scores.rarverse.com/fullchain.pem;
-    ssl_certificate_key /etc/ssl/scores.rarverse.com/privkey.pem;
+    ssl_certificate     /path/to/fullchain.pem;
+    ssl_certificate_key /path/to/privkey.pem;
 
     location / {
         proxy_pass http://osu_score_web;

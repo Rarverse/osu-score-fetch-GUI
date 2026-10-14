@@ -1,41 +1,18 @@
-# Own certificate in direct mode. No ACME.
+# Plain HTTP only. HTTPS is the reverse proxy's job (SafeLine, Nginx, or
+# another Caddy on the host). This file does not load certificates and does
+# not redirect to HTTPS.
 #
-# auto_https off disables certificate issuance and Caddy's built-in
-# HTTP→HTTPS redirect. That redirect always targets port 443.
-# auto_https disable_certs still installs that redirect, so it is not used here.
-#
-# direct (default): listen :443 inside the container and present
-# /certs/fullchain.pem + /certs/privkey.pem. The host publish is
-# ${HTTPS_PORT}:443. SNI is the hostname only. The Host header may include
-# the public port; the site address stays https://{$SITE_DOMAIN}:443.
-#
-# proxy: plain HTTP on container port 80. TLS ends at SafeLine, Nginx, or
-# another Caddy on the host. Set CADDY_MODE=proxy and do not set
-# COMPOSE_PROFILES=direct, so compose does not publish a host HTTPS port.
-# This mode does not open certificate files. It does not redirect HTTP to HTTPS.
-#
-# On :80 only, the peer is trusted when it is in TRUSTED_PROXIES (the docker
-# bridge gateway, and loopback). X-Forwarded-For is then walked from the right
-# and the resolved address is what the API receives. :443 does not trust
-# forwarded headers. A missing or unreadable PEM in direct mode stops the
-# process. Docker restarts it (unless-stopped). Check `docker compose logs web`:
-#   open /certs/fullchain.pem: no such file or directory
-#   open /certs/privkey.pem: permission denied
-#   tls: private key does not match public key
+# The peer is trusted when it is in TRUSTED_PROXIES (the docker bridge
+# gateway, and loopback). X-Forwarded-For is walked from the right, and only
+# that resolved address is sent to the API.
 {
-	auto_https off
-	# HTTP/3 would advertise alt-svc h3=":443" (the container listen port).
-	servers :443 {
-		protocols h1 h2
-	}
 	servers :80 {
-		protocols h1 h2
 		trusted_proxies static {$TRUSTED_PROXIES:127.0.0.1 172.31.210.1}
 		client_ip_headers X-Forwarded-For
 	}
 }
 
-(static) {
+:80 {
 	encode gzip
 
 	@assets path /assets/*
@@ -47,62 +24,25 @@
 	@html path / /index.html *.html
 	header @html Cache-Control "no-cache"
 
+	handle /api/* {
+		reverse_proxy api:8000 {
+			header_up X-Forwarded-For {http.vars.client_ip}
+			header_up X-Real-IP {http.vars.client_ip}
+			header_up X-Forwarded-Proto {http.request.header.X-Forwarded-Proto}
+		}
+	}
+
+	handle /health {
+		reverse_proxy api:8000 {
+			header_up X-Forwarded-For {http.vars.client_ip}
+			header_up X-Real-IP {http.vars.client_ip}
+			header_up X-Forwarded-Proto {http.request.header.X-Forwarded-Proto}
+		}
+	}
+
 	handle {
 		root * /srv
 		try_files {path} /index.html
 		file_server
 	}
 }
-
-(api) {
-	handle /api/* {
-		reverse_proxy api:8000
-	}
-
-	handle /health {
-		reverse_proxy api:8000
-	}
-}
-
-(api_proxy) {
-	handle /api/* {
-		reverse_proxy api:8000 {
-			header_up X-Forwarded-For {http.vars.client_ip}
-			header_up X-Real-IP {http.vars.client_ip}
-			header_up X-Forwarded-Proto {http.request.header.X-Forwarded-Proto}
-		}
-	}
-
-	handle /health {
-		reverse_proxy api:8000 {
-			header_up X-Forwarded-For {http.vars.client_ip}
-			header_up X-Real-IP {http.vars.client_ip}
-			header_up X-Forwarded-Proto {http.request.header.X-Forwarded-Proto}
-		}
-	}
-}
-
-(direct) {
-	http://:80 {
-		# PUBLIC_HTTPS_PORT is substituted when Caddy loads this file.
-		# 443 (the default) is omitted so the Location has no explicit port.
-		@nonstandard expression `"{$PUBLIC_HTTPS_PORT:443}" != "443"`
-		redir @nonstandard https://{$SITE_DOMAIN}:{$PUBLIC_HTTPS_PORT:443}{uri} permanent
-		redir https://{$SITE_DOMAIN}{uri} permanent
-	}
-
-	https://{$SITE_DOMAIN}:443 {
-		tls /certs/fullchain.pem /certs/privkey.pem
-		import api
-		import static
-	}
-}
-
-(proxy) {
-	http://:80 {
-		import api_proxy
-		import static
-	}
-}
-
-import {$CADDY_MODE:direct}
