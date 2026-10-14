@@ -13,15 +13,15 @@ jobs:
     name: web
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: lts/*
           cache: npm
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Typecheck
         run: npm run typecheck --workspace apps/web
@@ -39,9 +39,9 @@ jobs:
       run:
         working-directory: apps/api
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - uses: astral-sh/setup-uv@v10.3.0
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           enable-cache: true
           python-version: "3.12"
@@ -50,7 +50,7 @@ jobs:
             apps/api/uv.lock
 
       - name: Install dependencies
-        run: uv sync
+        run: uv sync --locked
 
       - name: Lint
         run: uv run ruff check .
@@ -63,6 +63,45 @@ jobs:
       - name: Test
         run: env -u OSU_CLIENT_ID -u OSU_CLIENT_SECRET uv run pytest
 
+  dependency-review:
+    name: dependency-review
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Review dependencies
+        id: review
+        continue-on-error: true
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: high
+
+      # The action step continues on error so this step can tell a missing
+      # dependency graph / Advanced Security response from a real finding.
+      # High-severity results still fail the job.
+      - name: Fail unless dependency review could not run
+        if: steps.review.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          code=$(curl -sS -o /tmp/dependency-review.json -w '%{http_code}' \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${REPO}/dependency-graph/compare/${BASE_SHA}...${HEAD_SHA}")
+          if [ "$code" = "403" ]; then
+            echo "Dependency review could not run (HTTP 403)."
+            echo "On a private repository this requires Dependency graph and GitHub Advanced Security."
+            cat /tmp/dependency-review.json
+            exit 0
+          fi
+          echo "Dependency review failed (compare API HTTP ${code}). High-severity findings fail this job."
+          cat /tmp/dependency-review.json
+          exit 1
+
   deploy:
     name: deploy
     runs-on: ubuntu-latest
@@ -74,7 +113,6 @@ jobs:
     permissions:
       contents: read
       packages: write
-      actions: write
     env:
       API_IMAGE: ghcr.io/rarverse/osu-score-fetch-gui-api
       WEB_IMAGE: ghcr.io/rarverse/osu-score-fetch-gui-web
@@ -90,7 +128,7 @@ jobs:
       API_SERVICE: ${{ vars.DEPLOY_API_SERVICE || 'api' }}
       SITE_URL: ${{ vars.SITE_URL }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Check Dockerfiles
         id: dockerfiles
@@ -105,10 +143,10 @@ jobs:
           done
           echo "present=${present}" >> "$GITHUB_OUTPUT"
 
-      - uses: docker/setup-buildx-action@v4
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
         if: steps.dockerfiles.outputs.present == 'true'
 
-      - uses: docker/login-action@v4
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         if: steps.dockerfiles.outputs.present == 'true'
         with:
           registry: ghcr.io
@@ -117,14 +155,14 @@ jobs:
 
       - name: Build and push API image
         if: steps.dockerfiles.outputs.present == 'true'
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: ${{ env.API_CONTEXT }}
           file: ${{ env.API_DOCKERFILE }}
           push: true
           platforms: linux/amd64
-          provenance: false
-          sbom: false
+          provenance: mode=max
+          sbom: true
           tags: |
             ${{ env.API_IMAGE }}:${{ github.sha }}
             ${{ env.API_IMAGE }}:latest
@@ -135,14 +173,14 @@ jobs:
 
       - name: Build and push web image
         if: steps.dockerfiles.outputs.present == 'true'
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: ${{ env.WEB_CONTEXT }}
           file: ${{ env.WEB_DOCKERFILE }}
           push: true
           platforms: linux/amd64
-          provenance: false
-          sbom: false
+          provenance: mode=max
+          sbom: true
           build-args: |
             VITE_SITE_URL=${{ env.SITE_URL }}
           tags: |
