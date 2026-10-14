@@ -13,15 +13,15 @@ jobs:
     name: web
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: lts/*
           cache: npm
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Typecheck
         run: npm run typecheck --workspace apps/web
@@ -39,9 +39,9 @@ jobs:
       run:
         working-directory: apps/api
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - uses: astral-sh/setup-uv@v10.3.0
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           enable-cache: true
           python-version: "3.12"
@@ -50,9 +50,348 @@ jobs:
             apps/api/uv.lock
 
       - name: Install dependencies
-        run: uv sync
+        run: uv sync --locked
+
+      - name: Lint
+        run: uv run ruff check .
+
+      - name: Format
+        run: uv run ruff format --check .
 
       # OSU_CLIENT_ID and OSU_CLIENT_SECRET stay unset. No secrets.
       # test_api_error_contract expects NOT_CONFIGURED and fails if either is set.
       - name: Test
         run: env -u OSU_CLIENT_ID -u OSU_CLIENT_SECRET uv run pytest
+
+  dependency-review:
+    name: dependency-review
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Review dependencies
+        id: review
+        continue-on-error: true
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: high
+
+      # The action step continues on error so this step can tell a missing
+      # dependency graph / Advanced Security response from a real finding.
+      # High-severity results still fail the job.
+      - name: Fail unless dependency review could not run
+        if: steps.review.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          code=$(curl -sS -o /tmp/dependency-review.json -w '%{http_code}' \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${REPO}/dependency-graph/compare/${BASE_SHA}...${HEAD_SHA}")
+          if [ "$code" = "403" ]; then
+            echo "Dependency review could not run (HTTP 403)."
+            echo "On a private repository this requires Dependency graph and GitHub Advanced Security."
+            cat /tmp/dependency-review.json
+            exit 0
+          fi
+          echo "Dependency review failed (compare API HTTP ${code}). High-severity findings fail this job."
+          cat /tmp/dependency-review.json
+          exit 1
+
+  docker-build:
+    name: docker-build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      SITE_URL: ${{ vars.SITE_URL || 'https://example.invalid' }}
+    steps:
+      # pull_request events check out the merge commit by default. Do not set ref.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Check Dockerfiles on this checkout
+        id: dockerfiles
+        run: |
+          set -euo pipefail
+          echo "Checked-out commit: $(git rev-parse HEAD)"
+          present=true
+          if [ ! -f apps/api/Dockerfile ]; then
+            echo "Missing apps/api/Dockerfile on this checkout; skipping image build."
+            present=false
+          fi
+          if [ ! -f apps/web/Dockerfile ]; then
+            echo "Missing apps/web/Dockerfile on this checkout; skipping image build."
+            present=false
+          fi
+          echo "present=${present}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+        if: steps.dockerfiles.outputs.present == 'true'
+
+      - name: Build API image
+        if: steps.dockerfiles.outputs.present == 'true'
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: apps/api
+          file: apps/api/Dockerfile
+          push: false
+          platforms: linux/amd64
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,mode=max,scope=api
+
+      - name: Build web image
+        if: steps.dockerfiles.outputs.present == 'true'
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: apps/web/Dockerfile
+          push: false
+          platforms: linux/amd64
+          build-args: |
+            VITE_SITE_URL=${{ env.SITE_URL }}
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,mode=max,scope=web
+
+  deploy:
+    name: deploy
+    runs-on: ubuntu-latest
+    needs: [web, api, docker-build]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.DEPLOY_ENABLED == 'true'
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      packages: write
+    env:
+      API_IMAGE: ghcr.io/rarverse/osu-score-fetch-gui-api
+      WEB_IMAGE: ghcr.io/rarverse/osu-score-fetch-gui-web
+      API_DOCKERFILE: ${{ vars.API_DOCKERFILE || 'apps/api/Dockerfile' }}
+      WEB_DOCKERFILE: ${{ vars.WEB_DOCKERFILE || 'apps/web/Dockerfile' }}
+      API_CONTEXT: ${{ vars.API_BUILD_CONTEXT || 'apps/api' }}
+      WEB_CONTEXT: ${{ vars.WEB_BUILD_CONTEXT || '.' }}
+      COMPOSE_FILE: ${{ vars.COMPOSE_FILE || 'deploy/compose.yaml' }}
+      CADDYFILE: ${{ vars.CADDYFILE || 'deploy/Caddyfile' }}
+      DEPLOY_DIR: ${{ vars.DEPLOY_DIR || '/opt/osu-score-api' }}
+      HEALTH_URL: ${{ vars.DEPLOY_HEALTH_URL || 'http://127.0.0.1:8000/health' }}
+      HEALTH_MODE: ${{ vars.DEPLOY_HEALTH_MODE || 'host' }}
+      API_SERVICE: ${{ vars.DEPLOY_API_SERVICE || 'api' }}
+      SITE_URL: ${{ vars.SITE_URL }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Check Dockerfiles
+        id: dockerfiles
+        run: |
+          set -euo pipefail
+          present=true
+          for path in "$API_DOCKERFILE" "$WEB_DOCKERFILE"; do
+            if [ ! -f "$path" ]; then
+              echo "Missing ${path}; skipping image build and remote deploy."
+              present=false
+            fi
+          done
+          echo "present=${present}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+        if: steps.dockerfiles.outputs.present == 'true'
+
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        if: steps.dockerfiles.outputs.present == 'true'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push API image
+        if: steps.dockerfiles.outputs.present == 'true'
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: ${{ env.API_CONTEXT }}
+          file: ${{ env.API_DOCKERFILE }}
+          push: true
+          platforms: linux/amd64
+          provenance: mode=max
+          sbom: true
+          tags: |
+            ${{ env.API_IMAGE }}:${{ github.sha }}
+            ${{ env.API_IMAGE }}:latest
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,mode=max,scope=api
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+
+      - name: Build and push web image
+        if: steps.dockerfiles.outputs.present == 'true'
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: ${{ env.WEB_CONTEXT }}
+          file: ${{ env.WEB_DOCKERFILE }}
+          push: true
+          platforms: linux/amd64
+          provenance: mode=max
+          sbom: true
+          build-args: |
+            VITE_SITE_URL=${{ env.SITE_URL }}
+          tags: |
+            ${{ env.WEB_IMAGE }}:${{ github.sha }}
+            ${{ env.WEB_IMAGE }}:latest
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,mode=max,scope=web
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+
+      - name: Check Compose files
+        id: compose
+        if: steps.dockerfiles.outputs.present == 'true'
+        run: |
+          set -euo pipefail
+          present=true
+          for path in "$COMPOSE_FILE" "$CADDYFILE"; do
+            if [ ! -f "$path" ]; then
+              echo "Missing ${path}; skipping remote deploy."
+              present=false
+            fi
+          done
+          echo "present=${present}" >> "$GITHUB_OUTPUT"
+
+      - name: Configure SSH
+        if: steps.compose.outputs.present == 'true'
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$DEPLOY_HOST" =~ ^[A-Za-z0-9._:-]+$ ]]; then
+            echo "DEPLOY_HOST is missing or has unsupported characters"
+            exit 1
+          fi
+          if [[ ! "$DEPLOY_USER" =~ ^[A-Za-z0-9._-]+$ ]]; then
+            echo "DEPLOY_USER is missing or has unsupported characters"
+            exit 1
+          fi
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" | sed 's/\\n/\n/g' > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          if [ -n "${DEPLOY_KNOWN_HOSTS:-}" ]; then
+            printf '%s\n' "$DEPLOY_KNOWN_HOSTS" | sed 's/\\n/\n/g' > ~/.ssh/known_hosts
+          else
+            ssh-keyscan -H "$DEPLOY_HOST" > ~/.ssh/known_hosts
+          fi
+          chmod 600 ~/.ssh/known_hosts
+          cat > ~/.ssh/config <<EOF
+          Host deploy
+            HostName ${DEPLOY_HOST}
+            User ${DEPLOY_USER}
+            IdentityFile ~/.ssh/deploy_key
+            IdentitiesOnly yes
+            UserKnownHostsFile ~/.ssh/known_hosts
+            StrictHostKeyChecking yes
+          EOF
+          chmod 600 ~/.ssh/config
+
+      - name: Deploy with Docker Compose
+        if: steps.compose.outputs.present == 'true'
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$DEPLOY_DIR" =~ ^/[A-Za-z0-9._/-]+$ ]]; then
+            echo "DEPLOY_DIR must be an absolute path with no spaces"
+            exit 1
+          fi
+          case "$DEPLOY_DIR" in
+            /etc|/etc/*|/var/lib|/var/lib/*)
+              echo "DEPLOY_DIR must not be the server env or persistent data directory"
+              exit 1
+              ;;
+          esac
+          if [[ ! "$IMAGE_TAG" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "IMAGE_TAG must be the full git sha"
+            exit 1
+          fi
+          case "$HEALTH_MODE" in
+            host|exec) ;;
+            *)
+              echo "DEPLOY_HEALTH_MODE must be host or exec"
+              exit 1
+              ;;
+          esac
+          if [[ ! "$API_SERVICE" =~ ^[A-Za-z0-9._-]+$ ]]; then
+            echo "DEPLOY_API_SERVICE has unsupported characters"
+            exit 1
+          fi
+          if [[ ! "$HEALTH_URL" =~ ^https?://[A-Za-z0-9._:-]+(/[A-Za-z0-9._~:/?#@!$\&\'\(\)*+,;=%-]*)?$ ]]; then
+            echo "DEPLOY_HEALTH_URL must be an http(s) URL"
+            exit 1
+          fi
+          ssh deploy "mkdir -p $(printf '%q' "$DEPLOY_DIR")"
+          scp "$COMPOSE_FILE" "deploy:${DEPLOY_DIR}/compose.yaml"
+          scp "$CADDYFILE" "deploy:${DEPLOY_DIR}/Caddyfile"
+          ssh deploy "bash -s" -- "$DEPLOY_DIR" "$IMAGE_TAG" "$HEALTH_MODE" "$HEALTH_URL" "$API_SERVICE" <<'EOF'
+          set -euo pipefail
+          dir=$1
+          sha=$2
+          mode=$3
+          url=$4
+          service=$5
+          cd "$dir"
+          prev=""
+          if [ -f .env.deploy ]; then
+            prev=$(grep -E '^IMAGE_TAG=' .env.deploy | tail -n 1 | cut -d= -f2- | tr -d '\r' || true)
+          fi
+          write_tag() {
+            local tag="$1"
+            local tmp
+            tmp=$(mktemp)
+            if [ -f .env.deploy ]; then
+              grep -v -E '^IMAGE_TAG=' .env.deploy > "$tmp" || true
+            fi
+            printf 'IMAGE_TAG=%s\n' "$tag" >> "$tmp"
+            mv "$tmp" .env.deploy
+          }
+          restore_prev() {
+            if [ -z "$prev" ]; then
+              echo "No previous IMAGE_TAG; leaving the failed tag in .env.deploy"
+              return 0
+            fi
+            echo "Restoring previous IMAGE_TAG"
+            write_tag "$prev"
+            docker compose --env-file .env.deploy -f compose.yaml up -d
+          }
+          write_tag "$sha"
+          if ! docker compose --env-file .env.deploy -f compose.yaml pull \
+            || ! docker compose --env-file .env.deploy -f compose.yaml up -d; then
+            restore_prev
+            exit 1
+          fi
+          ok=0
+          for _ in $(seq 1 30); do
+            code="000"
+            if [ "$mode" = "exec" ]; then
+              code=$(docker compose --env-file .env.deploy -f compose.yaml exec -T "$service" \
+                curl -sS -o /dev/null -w '%{http_code}' --max-time 5 "$url" || true)
+            else
+              code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 "$url" || true)
+            fi
+            if [ "$code" = "200" ]; then
+              ok=1
+              break
+            fi
+            sleep 2
+          done
+          if [ "$ok" != "1" ]; then
+            echo "Health check did not return 200"
+            restore_prev
+            exit 1
+          fi
+          echo "Health check returned 200"
+          EOF
