@@ -15,7 +15,7 @@
     "react-markdown": "10.1.0",
     "react": "19.3.0",
     "react-dom": "19.3.0",
-    "lucide-react": "0.468.0"
+    "lucide-react": "1.55.0"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.15",
