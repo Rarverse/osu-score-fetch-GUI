@@ -18,6 +18,7 @@ import { ApiError, getScores, waitForRetry } from "./api";
 import introEn from "./content/intro.en.md?raw";
 import intro from "./content/intro.md?raw";
 import { language, locale, t } from "./i18n";
+import ModeIcon from "./ModeIcon";
 import {
   modeLabels,
   type Ruleset,
@@ -283,6 +284,13 @@ export default function App() {
               {!loading && <ChevronRight size={16} />}
             </button>
             <div className="search-options">
+              <div
+                className="mode-badge"
+                role="img"
+                aria-label={t("currentMode", { mode: modeLabels[mode] })}
+              >
+                <ModeIcon mode={mode} />
+              </div>
               <fieldset className="mode-tabs">
                 <legend className="sr-only">{t("mode")}</legend>
                 {(Object.keys(modeLabels) as Ruleset[]).map((value) => (
@@ -293,6 +301,7 @@ export default function App() {
                     disabled={loading}
                     onClick={() => changeMode(value)}
                   >
+                    <ModeIcon mode={value} />
                     {modeLabels[value]}
                   </button>
                 ))}

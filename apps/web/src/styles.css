@@ -219,6 +219,10 @@ h1 {
   min-width: 0;
 }
 .mode-tabs button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
   background: transparent;
   color: #8e8c9a;
   border: 0;
@@ -226,6 +230,25 @@ h1 {
   padding: 6px 9px;
   font-size: 11px;
   white-space: nowrap;
+}
+.mode-icon {
+  width: 14px;
+  height: 14px;
+}
+.mode-badge {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  background: #101116;
+  color: #c9b2ff;
+  border: 1px solid #34333f;
+}
+.mode-badge .mode-icon {
+  width: 18px;
+  height: 18px;
 }
 .mode-tabs button[aria-pressed="true"] {
   background: #30283e;

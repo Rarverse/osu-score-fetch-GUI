@@ -6,9 +6,13 @@ import "./styles.css";
 
 document.documentElement.lang = language;
 document.title = t("appName");
+const description = t("description");
 document
   .querySelector('meta[name="description"]')
-  ?.setAttribute("content", t("description"));
+  ?.setAttribute("content", description);
+document
+  .querySelector('meta[property="og:description"]')
+  ?.setAttribute("content", description);
 
 const root = document.getElementById("root");
 if (root) {
