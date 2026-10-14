@@ -152,8 +152,19 @@ def test_api_cache_validation_and_rate_limit(tmp_path):
     assert client.get(url + "?type=recent").status_code == 422
 
 
-def test_api_error_contract(tmp_path):
-    app = create_app(Settings(_env_file=None, cache_path=tmp_path))
+def test_api_error_contract(tmp_path, monkeypatch):
+    monkeypatch.delenv("OSU_CLIENT_ID", raising=False)
+    monkeypatch.delenv("OSU_CLIENT_SECRET", raising=False)
+    monkeypatch.setenv("OSU_CLIENT_ID", "1")
+    monkeypatch.setenv("OSU_CLIENT_SECRET", "dummy")
+    app = create_app(
+        Settings(
+            _env_file=None,
+            cache_path=tmp_path,
+            osu_client_id=None,
+            osu_client_secret=None,
+        )
+    )
     client = TestClient(app)
     assert client.get("/api/v1/players/test/scores").json()["error"]["code"] == "NOT_CONFIGURED"
     for status, code in [(404, "PLAYER_NOT_FOUND"), (502, "UPSTREAM_ERROR")]:
@@ -162,7 +173,8 @@ def test_api_error_contract(tmp_path):
             raise ServiceError(status, code, "test error")
 
         app.state.osu.get_user_scores = fetch
-        response = client.get("/api/v1/players/test/scores")
+        # A cached 404 is per player, so each contract check uses its own name.
+        response = client.get(f"/api/v1/players/contract-{code}/scores")
         assert response.status_code == status
         assert response.json()["error"]["code"] == code
 
@@ -287,3 +299,62 @@ def test_osu_client_uses_selected_mode_for_stats_and_scores(monkeypatch, mode):
     response = service.get_user_scores("Player", mode)
     assert queried_modes == [mode, mode]
     assert response.mode == mode
+
+
+def test_player_not_found_is_cached_for_every_mode(tmp_path, monkeypatch):
+    clock = {"now": 1_000.0}
+    monkeypatch.setattr("app.services.cache.time.time", lambda: clock["now"])
+    app = create_app(
+        Settings(
+            _env_file=None,
+            cache_path=tmp_path,
+            negative_cache_ttl=60,
+            rate_limit_per_player=10,
+            osu_client_id=None,
+            osu_client_secret=None,
+        )
+    )
+    calls = []
+
+    def fetch(name, mode):
+        calls.append((name, mode))
+        raise ServiceError(404, "PLAYER_NOT_FOUND", "未找到该玩家，请检查用户名或 ID。")
+
+    app.state.osu.get_user_scores = fetch
+    client = TestClient(app)
+    url = "/api/v1/players/MissingPlayerZZ/scores"
+    first = client.get(url)
+    assert first.status_code == 404
+    assert first.json()["error"]["code"] == "PLAYER_NOT_FOUND"
+    assert first.headers["cache-control"] == "no-store"
+    assert first.headers["x-cache"] == "MISS"
+    assert first.headers["x-cache-ttl"] == "60"
+    second = client.get(url + "?mode=osu")
+    assert second.status_code == 404
+    assert second.json() == first.json()
+    assert second.headers["x-cache"] == "HIT"
+    assert second.headers["cache-control"] == "no-store"
+    assert len(calls) == 1
+    stored = "\n".join(path.read_text() for path in tmp_path.rglob("*.json"))
+    assert "MissingPlayerZZ" not in stored
+    clock["now"] = 1_060
+    third = client.get(url)
+    assert third.status_code == 404
+    assert third.headers["x-cache"] == "MISS"
+    assert len(calls) == 2
+
+
+def test_other_upstream_errors_are_not_negatively_cached(tmp_path):
+    app = create_app(Settings(_env_file=None, cache_path=tmp_path, rate_limit_per_player=10))
+    calls = []
+
+    def fetch(name, mode):
+        calls.append(mode)
+        raise ServiceError(502, "UPSTREAM_ERROR", "osu! 服务暂时无法访问，请稍后重试。")
+
+    app.state.osu.get_user_scores = fetch
+    client = TestClient(app)
+    url = "/api/v1/players/Player/scores"
+    assert client.get(url).status_code == 502
+    assert client.get(url).status_code == 502
+    assert calls == ["mania", "mania"]

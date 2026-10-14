@@ -20,6 +20,12 @@ def score_cache_key(player: str, mode: Ruleset = "mania") -> str:
     return hashlib.sha256(raw.encode()).hexdigest()
 
 
+def not_found_cache_key(player: str) -> str:
+    # A missing player 404s in every mode, so one short-lived entry covers all of them.
+    raw = f"v1:not-found:{normalize_player(player)}"
+    return hashlib.sha256(raw.encode()).hexdigest()
+
+
 class JsonCache:
     def __init__(self, directory: Path, ttl: int, retention: int = 15552000):
         self.directory = directory
@@ -41,14 +47,22 @@ class JsonCache:
                 continue
 
     def get(self, key: str) -> dict | None:
+        fresh = self.get_fresh(key)
+        if fresh is None:
+            return None
+        data, _remaining = fresh
+        return data
+
+    def get_fresh(self, key: str) -> tuple[dict, int] | None:
         with self.lock:
             self._cleanup()
             path = self.directory / f"{key}.json"
             try:
                 entry = json.loads(path.read_text())
-                if time.time() - entry["created_at"] >= self.ttl:
+                age = time.time() - float(entry["created_at"])
+                if age >= self.ttl:
                     return None
-                return entry["data"]
+                return entry["data"], max(0, int(self.ttl - age))
             except (OSError, ValueError, KeyError, TypeError):
                 return None
 

@@ -11,6 +11,7 @@ from app.routers.players import router
 from app.services.cache import JsonCache
 from app.services.osu_client import OsuClient, ServiceError
 from app.services.rate_limit import RateLimiter
+from app.services.usage import UsageStats
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -20,6 +21,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.cache = JsonCache(
         settings.cache_path, settings.cache_timeout, settings.cache_retention
     )
+    app.state.not_found = JsonCache(
+        settings.cache_path / "not-found",
+        settings.negative_cache_ttl,
+        settings.negative_cache_ttl,
+    )
+    app.state.stats = UsageStats(settings.stats_path)
     app.state.osu = OsuClient(settings)
     app.state.limiter = RateLimiter(settings.rate_limit_window)
     app.state.fetch_lock = Lock()
@@ -27,7 +34,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         CORSMiddleware,
         allow_origins=settings.cors_origins,
         allow_methods=["GET"],
-        allow_headers=["X-Osu-Client-Id", "X-Osu-Client-Secret"],
+        allow_headers=["X-Osu-Client-Id", "X-Osu-Client-Secret", "X-Visitor-Id"],
         expose_headers=["X-Cache", "X-Cache-TTL", "Retry-After"],
     )
 
@@ -36,6 +43,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         headers = {"Cache-Control": "no-store"}
         if error.retry_after is not None:
             headers["Retry-After"] = str(error.retry_after)
+        if error.cache:
+            headers["X-Cache"] = error.cache
+        if error.cache_ttl is not None:
+            headers["X-Cache-TTL"] = str(error.cache_ttl)
         return JSONResponse(
             status_code=error.status,
             content={"error": {"code": error.code, "message": error.message}},

@@ -1,7 +1,9 @@
 const zh = {
   appName: "Rarsu查分器",
   home: "Rarsu查分器首页",
-  description: "Rarsu查分器，rarverse 旗下 fan-made osu! 网页查分器。",
+  description:
+    "Rarsu查分器：输入 osu! 用户名，直接看 TA 的 Top 20/50 成绩。四个模式都能查，不用登录。",
+  currentMode: "当前模式：{mode}",
   visitOsu: "访问 osu!",
   playerLabel: "玩家用户名或 ID",
   playerPlaceholder: "输入玩家用户名或 ID",
@@ -71,7 +73,9 @@ type MessageKey = keyof typeof zh;
 const en: Record<MessageKey, string> = {
   appName: "Rarsu Score Checker",
   home: "Rarsu Score Checker home",
-  description: "Rarsu Score Checker, a fan-made osu! score viewer by rarverse.",
+  description:
+    "Rarsu Score Checker: type an osu! username and see their top 20/50 plays. Works for all four modes, no login needed.",
+  currentMode: "Current mode: {mode}",
   visitOsu: "Visit osu!",
   playerLabel: "Player username or ID",
   playerPlaceholder: "Enter a player username or ID",
