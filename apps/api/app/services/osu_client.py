@@ -14,6 +14,8 @@ class ServiceError(Exception):
     def __init__(self, status: int, code: str, message: str, retry_after: int | None = None):
         self.status, self.code, self.message = status, code, message
         self.retry_after = retry_after
+        self.cache: str | None = None
+        self.cache_ttl: int | None = None
 
 
 class TimeoutAdapter(HTTPAdapter):
