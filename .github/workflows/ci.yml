@@ -13,7 +13,7 @@ jobs:
     name: web
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
@@ -39,7 +39,7 @@ jobs:
       run:
         working-directory: apps/api
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
@@ -111,7 +111,7 @@ jobs:
       SITE_URL: ${{ vars.SITE_URL || 'https://example.invalid' }}
     steps:
       # pull_request events check out the merge commit by default. Do not set ref.
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Check Dockerfiles on this checkout
         id: dockerfiles
@@ -184,7 +184,7 @@ jobs:
       API_SERVICE: ${{ vars.DEPLOY_API_SERVICE || 'api' }}
       SITE_URL: ${{ vars.SITE_URL }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Check Dockerfiles
         id: dockerfiles
