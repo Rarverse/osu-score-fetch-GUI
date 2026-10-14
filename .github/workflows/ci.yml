@@ -113,6 +113,9 @@ jobs:
       # pull_request events check out the merge commit by default. Do not set ref.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      - name: Validate Compose config
+        run: docker compose config --quiet
+
       - name: Check Dockerfiles on this checkout
         id: dockerfiles
         run: |
@@ -174,8 +177,10 @@ jobs:
       WEB_DOCKERFILE: ${{ vars.WEB_DOCKERFILE || 'apps/web/Dockerfile' }}
       API_CONTEXT: ${{ vars.API_BUILD_CONTEXT || 'apps/api' }}
       WEB_CONTEXT: ${{ vars.WEB_BUILD_CONTEXT || '.' }}
-      COMPOSE_FILE: ${{ vars.COMPOSE_FILE || 'deploy/compose.yaml' }}
-      CADDYFILE: ${{ vars.CADDYFILE || 'deploy/Caddyfile' }}
+      # DEPLOY_DIR must be the only directory that runs this project (the same
+      # directory used for manual `docker compose`). A second checkout is a
+      # second project and both will try to bind HTTP_PORT (default 8080).
+      # Layout: compose.yaml, .env, deploy/compose.yaml, deploy/Caddyfile.
       DEPLOY_DIR: ${{ vars.DEPLOY_DIR || '/opt/osu-score-api' }}
       # deploy/compose.yaml does not publish api port 8000. Probe inside that service.
       # vars.DEPLOY_HEALTH_URL, vars.DEPLOY_HEALTH_MODE, and vars.DEPLOY_API_SERVICE still override.
@@ -253,7 +258,7 @@ jobs:
         run: |
           set -euo pipefail
           present=true
-          for path in "$COMPOSE_FILE" "$CADDYFILE"; do
+          for path in compose.yaml deploy/compose.yaml deploy/Caddyfile; do
             if [ ! -f "$path" ]; then
               echo "Missing ${path}; skipping remote deploy."
               present=false
@@ -335,9 +340,11 @@ jobs:
             echo "DEPLOY_HEALTH_URL must be an http(s) URL"
             exit 1
           fi
-          ssh deploy "mkdir -p $(printf '%q' "$DEPLOY_DIR")"
-          scp "$COMPOSE_FILE" "deploy:${DEPLOY_DIR}/compose.yaml"
-          scp "$CADDYFILE" "deploy:${DEPLOY_DIR}/Caddyfile"
+          echo "Deploying into ${DEPLOY_DIR} as project osu-score-api. This must be the only compose directory."
+          ssh deploy "mkdir -p $(printf '%q' "$DEPLOY_DIR") && rm -f $(printf '%q' "$DEPLOY_DIR")/Caddyfile"
+          # Root compose.yaml includes deploy/compose.yaml. Keep that layout.
+          # Drop a flat Caddyfile left by the previous deploy; it is not mounted.
+          tar -cf - compose.yaml .env.example deploy | ssh deploy "tar -C $(printf '%q' "$DEPLOY_DIR") -xf -"
           ssh deploy "bash -s" -- "$DEPLOY_DIR" "$IMAGE_TAG" "$HEALTH_MODE" "$HEALTH_URL" "$API_SERVICE" <<'EOF'
           set -euo pipefail
           dir=$1
@@ -346,32 +353,38 @@ jobs:
           url=$4
           service=$5
           cd "$dir"
+          if [ -f .env.deploy ] && [ ! -f .env ]; then
+            echo "Migrating .env.deploy to .env"
+            mv .env.deploy .env
+          elif [ -f .env.deploy ] && [ -f .env ]; then
+            echo "Both .env and .env.deploy exist; using .env and leaving .env.deploy in place"
+          fi
           prev=""
-          if [ -f .env.deploy ]; then
-            prev=$(grep -E '^IMAGE_TAG=' .env.deploy | tail -n 1 | cut -d= -f2- | tr -d '\r' || true)
+          if [ -f .env ]; then
+            prev=$(grep -E '^IMAGE_TAG=' .env | tail -n 1 | cut -d= -f2- | tr -d '\r' || true)
           fi
           write_tag() {
             local tag="$1"
             local tmp
             tmp=$(mktemp)
-            if [ -f .env.deploy ]; then
-              grep -v -E '^IMAGE_TAG=' .env.deploy > "$tmp" || true
+            if [ -f .env ]; then
+              grep -v -E '^IMAGE_TAG=' .env > "$tmp" || true
             fi
             printf 'IMAGE_TAG=%s\n' "$tag" >> "$tmp"
-            mv "$tmp" .env.deploy
+            mv "$tmp" .env
           }
           restore_prev() {
             if [ -z "$prev" ]; then
-              echo "No previous IMAGE_TAG; leaving the failed tag in .env.deploy"
+              echo "No previous IMAGE_TAG; leaving the failed tag in .env"
               return 0
             fi
             echo "Restoring previous IMAGE_TAG"
             write_tag "$prev"
-            docker compose --env-file .env.deploy -f compose.yaml up -d
+            docker compose up -d
           }
           write_tag "$sha"
-          if ! docker compose --env-file .env.deploy -f compose.yaml pull \
-            || ! docker compose --env-file .env.deploy -f compose.yaml up -d; then
+          if ! docker compose pull \
+            || ! docker compose up -d; then
             restore_prev
             exit 1
           fi
@@ -381,7 +394,7 @@ jobs:
             if [ "$mode" = "exec" ]; then
               # The api image is python slim and has no curl. Same urllib probe as its HEALTHCHECK.
               # A non-2xx response or a connection error exits before print, so code stays empty.
-              code=$(docker compose --env-file .env.deploy -f compose.yaml exec -T "$service" \
+              code=$(docker compose exec -T "$service" \
                 python -c 'import sys,urllib.request; print(urllib.request.urlopen(sys.argv[1], timeout=5).status)' \
                 "$url" || true)
             else

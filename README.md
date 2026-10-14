@@ -40,7 +40,25 @@ npm run dev
 
 打开 http://127.0.0.1:5173。Vite 将 `/api` 和 `/health` 代理到 http://127.0.0.1:8000。API 交互文档：http://127.0.0.1:8000/docs；实时 OpenAPI：http://127.0.0.1:8000/openapi.json。
 
-`.env` 无需前端配置。未配置 OAuth 时 `/health` 仍可用，查询返回 `503 NOT_CONFIGURED`；不返回演示成绩。部署者可以配置服务端凭据，也可以让访客在页面中填写自己的凭据。
+`apps/api/.env` 无需前端配置。未配置 OAuth 时 `/health` 仍可用，查询返回 `503 NOT_CONFIGURED`；不返回演示成绩。部署者可以配置服务端凭据，也可以让访客在页面中填写自己的凭据。
+
+## Docker Compose
+
+在仓库根目录启动整套服务：
+
+```sh
+cp .env.example .env
+# 编辑 .env。osu! Client ID / Secret 不要写在这里，也不要使用 VITE_ 前缀。
+docker compose up -d
+```
+
+停止：
+
+```sh
+docker compose down
+```
+
+项目名固定为 `osu-score-api`，已有的 `osu-score-api_osu-data` 卷会继续使用。Web 只监听 `127.0.0.1:8080`。HTTPS 仍由反向代理 SafeLine 处理，本仓库不申请、也不保存证书。SafeLine 上游填 `http://127.0.0.1:8080`。变量、密钥文件、回滚，以及从 `.env.deploy` 迁移的步骤见 `deploy/README.md`。服务器上的 `DEPLOY_DIR` 必须就是手工执行 compose 的那个目录，只保留这一份，否则两个项目会抢 8080。
 
 ## 环境变量与密钥
 
@@ -197,6 +215,6 @@ uv run pytest
 
 ## 生产与后续
 
-前端 `npm run build` 输出 `apps/web/dist`。自建部署使用 `deploy/compose.yaml`：Caddy 托管静态文件并反代 `/api` 与 `/health`，API 不对宿主机发布端口。步骤、GHCR 登录和回滚见 `deploy/README.md`。不要将 `vite preview` 用作生产服务器。本地仍可用 `uv run uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 1`。生产密钥放在 `/etc/osu-score-api/env`（权限 `600`），缓存和统计放在数据卷 `/var/lib/osu-score-api`，不要写进仓库。
+前端 `npm run build` 输出 `apps/web/dist`。自建部署在仓库根目录 `cp .env.example .env` 后执行 `docker compose up -d`：Caddy 托管静态文件并反代 `/api` 与 `/health`，只把 HTTP 绑到 `127.0.0.1:8080`，API 不对宿主机发布端口。HTTPS 由 SafeLine 终止，证书不在本仓库。步骤、GHCR 登录和回滚见 `deploy/README.md`。不要将 `vite preview` 用作生产服务器。本地仍可用 `uv run uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 1`。生产密钥放在 `/etc/osu-score-api/env`（权限 `600`），缓存和统计放在数据卷 `/var/lib/osu-score-api`，不要写进仓库。
 
 已知限制：仅 best、最多 50 条、基础 SR；没有后台自动轮询、recent、mods 后难度或 Pillow 出图。下一步可先加入有缓存的 mods 难度查询，再做 B50 卡片/图片导出；recent 需要同步扩展契约、缓存键和验收。

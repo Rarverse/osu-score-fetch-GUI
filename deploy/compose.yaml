@@ -1,18 +1,23 @@
-# Project name is fixed so Portainer and `docker compose` from any directory
-# manage the same containers and the osu-data volume.
+# Project name is fixed so Portainer and `docker compose -f deploy/compose.yaml`
+# manage the same containers and the osu-data volume. The repo root compose.yaml
+# repeats this name and includes this file. Prefer `docker compose up -d` from
+# that one directory (repo root, or DEPLOY_DIR). A second directory is a second
+# project and both try to bind HTTP_PORT.
 name: osu-score-api
 
 # One HTTP port. HTTPS is the reverse proxy on the host. Defaults are
 # 127.0.0.1:8080 so this stack does not take host port 80 or 443.
-# The deploy job overwrites this file and only preserves .env.deploy.
+# Interpolation comes from the root .env. The deploy job rewrites IMAGE_TAG there.
 services:
   api:
-    image: ghcr.io/rarverse/osu-score-fetch-gui-api:${IMAGE_TAG:?set IMAGE_TAG}
+    image: ghcr.io/rarverse/osu-score-fetch-gui-api:${IMAGE_TAG:-latest}
+    pull_policy: missing
     build:
       context: ../apps/api
       dockerfile: Dockerfile
     env_file:
-      - /etc/osu-score-api/env
+      - path: ${OSU_ENV_FILE:-/etc/osu-score-api/env}
+        required: false
     environment:
       CACHE_PATH: /var/lib/osu-score-api/cache
       STATS_PATH: /var/lib/osu-score-api/stats/usage.json
@@ -37,7 +42,8 @@ services:
     restart: unless-stopped
 
   web:
-    image: ghcr.io/rarverse/osu-score-fetch-gui-web:${IMAGE_TAG:?set IMAGE_TAG}
+    image: ghcr.io/rarverse/osu-score-fetch-gui-web:${IMAGE_TAG:-latest}
+    pull_policy: missing
     build:
       context: ..
       dockerfile: apps/web/Dockerfile

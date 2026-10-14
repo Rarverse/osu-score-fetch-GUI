@@ -1,0 +1,5 @@
+# One command from this directory: docker compose up -d
+# name matches deploy/compose.yaml so the volume stays osu-score-api_osu-data.
+# Run compose only from this directory (the repo root, or DEPLOY_DIR on the server).
+name: osu-score-api
+include: [deploy/compose.yaml]

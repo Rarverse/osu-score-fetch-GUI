@@ -1,7 +1,7 @@
+# Compose interpolation at the repo root. Copy from .env.example. Never commit.
 .env
 .env.*
 !.env.example
-!.env.deploy.example
 .venv/
 __pycache__/
 *.py[cod]

@@ -4,7 +4,19 @@
 
 HTTPS is your reverse proxy's job. 容器不读证书，也不把 HTTP 跳到 HTTPS。这台机器上雷池（SafeLine）已经占用宿主机 `80`/`443` 并终止 TLS，Portainer 也在管 Docker。web 只绑 `127.0.0.1:${HTTP_PORT}`（默认 `127.0.0.1:8080`）。公网地址是 `https://scores.rarverse.com`，没有端口。
 
-Compose 项目名固定为 `osu-score-api`（文件里的 `name:`）。在 `/opt/osu-score-api` 里执行和在 Portainer 里用同名 stack，看到的是同一组容器和卷 `osu-data`。
+在仓库根目录（服务器上则是 `DEPLOY_DIR`，默认 `/opt/osu-score-api`）：
+
+```sh
+cp .env.example .env
+# 编辑 .env。不要把 osu! 密钥写进这个文件。
+docker compose up -d
+```
+
+停止是 `docker compose down`。不需要 `--env-file`。Compose 读同目录的 `.env`。没写的 `IMAGE_TAG`、`BIND_ADDR`、`HTTP_PORT`、网段和 IP、`TRUSTED_PROXIES`、`FORWARDED_ALLOW_IPS` 用 compose 里的默认值，所以缺省也能启动：镜像标签 `latest`，监听 `127.0.0.1:8080`。
+
+根 `compose.yaml` 固定 `name: osu-score-api`，并 `include` `deploy/compose.yaml`。`deploy/compose.yaml` 里也写了同一个 `name:`，给 Portainer 单独粘贴那一个文件时用。数据卷因此仍是 `osu-score-api_osu-data`。
+
+`DEPLOY_DIR` 必须和你手工执行 `docker compose` 的目录是同一个，全机只留这一份。另一份目录再 `up` 一次就是第二个项目，两个项目会一起抢 `8080`。需要 Compose 插件 2.24 或更新。
 
 镜像：
 
@@ -15,7 +27,7 @@ Compose 项目名固定为 `osu-score-api`（文件里的 `name:`）。在 `/opt
 
 成绩缓存和匿名统计在命名卷 `osu-data` 上，挂到容器内 `/var/lib/osu-score-api`。`CACHE_PATH` 与 `STATS_PATH` 都指到这个目录，不写进镜像层，换 `IMAGE_TAG` 不会丢掉数据。
 
-生效的 Caddy 配置是构建 web 镜像时复制进去的 `/etc/caddy/Caddyfile`。部署任务也会把仓库里的 `deploy/Caddyfile` 拷到服务器的 `/opt/osu-score-api/Caddyfile`，但 Compose 不把这份文件挂进容器。改服务器上的副本不会改变正在跑的进程，下一次部署也会覆盖它。`TRUSTED_PROXIES` 在容器启动时从环境读入，改完后执行一次 `up -d` 即可，不必为了它重做镜像。
+生效的 Caddy 配置是构建 web 镜像时复制进去的 `/etc/caddy/Caddyfile`。部署任务把根 `compose.yaml` 和整个 `deploy/` 目录按原结构拷进 `DEPLOY_DIR`，这样 `include: [deploy/compose.yaml]` 才能解析。Caddyfile 在 `deploy/Caddyfile`，Compose 不把它挂进容器。改服务器上的副本不会改变正在跑的进程。`TRUSTED_PROXIES` 在容器启动时从环境读入，改完后执行一次 `up -d` 即可，不必为了它重做镜像。
 
 ## 1. 安装 Docker
 
@@ -37,7 +49,7 @@ sudo usermod -aG docker "$USER"
 
 ## 2. 登录 GHCR
 
-拉取私有或受限镜像时，使用只带 `read:packages` 的 GitHub token。不要把 token 写进仓库、镜像或 `env.deploy`。
+拉取私有或受限镜像时，使用只带 `read:packages` 的 GitHub token。不要把 token 写进仓库、镜像或 `.env`。
 
 ```sh
 # 从密码管理器或 GitHub Secrets 取出只读 token，粘贴到 stdin
@@ -59,14 +71,17 @@ sudoedit /etc/osu-score-api/env
 
 浏览器和 API 走同一个站点时，请求是同源的，不用为了端口去改 `CORS_ORIGINS`。公网来源写反代对外的地址，例如 `https://scores.rarverse.com`。
 
+在仓库根目录，或服务器上的 `DEPLOY_DIR`：
+
 ```sh
-sudo cp deploy/.env.deploy.example /opt/osu-score-api/.env.deploy
-sudoedit /opt/osu-score-api/.env.deploy
+cp .env.example .env
 ```
 
-已经在跑的机器不要整文件覆盖。部署任务每次只改写 `.env.deploy` 里的 `IMAGE_TAG` 一行，其余行会留下。把下面的变量补进现有文件。以前如果写过 `COMPOSE_PROFILES`、`CADDY_MODE`、`HTTPS_PORT`、`PUBLIC_HTTPS_PORT`、`TLS_CERT_DIR`、`SITE_DOMAIN`，删掉这些行。Compose 会读取 `COMPOSE_PROFILES`，留着旧值没有对应的服务。
+编辑 `.env`。这个文件没有 osu! 密钥。
 
-`.env.deploy` 没有 osu! 密钥：
+已经在跑的机器不要整文件覆盖。部署任务每次只改写 `.env` 里的 `IMAGE_TAG` 一行，其余行会留下。把下面的变量补进现有文件。以前如果写过 `COMPOSE_PROFILES`、`CADDY_MODE`、`HTTPS_PORT`、`PUBLIC_HTTPS_PORT`、`TLS_CERT_DIR`、`SITE_DOMAIN`，删掉这些行。Compose 会读取 `COMPOSE_PROFILES`，留着旧值没有对应的服务。从 `.env.deploy` 改名的步骤见「从 `.env.deploy` 迁移」。
+
+`.env` 没有 osu! 密钥：
 
 | 变量 | 作用 |
 | --- | --- |
@@ -79,35 +94,35 @@ sudoedit /opt/osu-score-api/.env.deploy
 | `FORWARDED_ALLOW_IPS` | 传给 uvicorn `--forwarded-allow-ips`，与 `WEB_IPV4` 相同 |
 | `VITE_SITE_URL` | 只在**本机** `docker compose build` 时写入 `og:image` / `og:url` |
 
-GitHub 上的部署流水线构建 web 镜像时用的是仓库变量 **`SITE_URL`**，不是 `.env.deploy` 里的 `VITE_SITE_URL`。这台机器的 `SITE_URL` 是：
+GitHub 上的部署流水线构建 web 镜像时用的是仓库变量 **`SITE_URL`**，不是 `.env` 里的 `VITE_SITE_URL`。这台机器的 `SITE_URL` 是：
 
 ```text
 https://scores.rarverse.com
 ```
 
-改完仓库变量后要发布新的 web 镜像。部署任务会把新的 git sha 写成 `IMAGE_TAG`。只改 `.env.deploy` 里的 `VITE_SITE_URL` 不会改掉已经打进镜像的地址。
+改完仓库变量后要发布新的 web 镜像。部署任务会把新的 git sha 写成 `IMAGE_TAG`。只改 `.env` 里的 `VITE_SITE_URL` 不会改掉已经打进镜像的地址。
 
 `VITE_SITE_URL` 在构建时写进 `index.html`。只 `pull` 已有镜像不会改掉已经打进去的地址。
 
 ## 4. 启动
 
 ```sh
-docker compose --env-file /opt/osu-score-api/.env.deploy -f deploy/compose.yaml pull
-docker compose --env-file /opt/osu-score-api/.env.deploy -f deploy/compose.yaml up -d
+docker compose pull
+docker compose up -d
 ```
 
 第一次在没有对应 GHCR 标签时，可以在同一命令后加 `build`，或分开执行：
 
 ```sh
-docker compose --env-file /opt/osu-score-api/.env.deploy -f deploy/compose.yaml build
-docker compose --env-file /opt/osu-score-api/.env.deploy -f deploy/compose.yaml up -d
+docker compose build
+docker compose up -d
 ```
 
 部署任务在服务器上的工作目录是 `/opt/osu-score-api`，用的是已拷贝的 `compose.yaml`：
 
 ```sh
-docker compose --env-file .env.deploy -f compose.yaml pull
-docker compose --env-file .env.deploy -f compose.yaml up -d
+docker compose pull
+docker compose up -d
 ```
 
 API 容器入口先准备数据目录，再以降权用户 `osu`（uid 10001）启动 **一个** uvicorn worker。进程监听 `0.0.0.0:8000`，但 Compose 没有把该端口映射到宿主机。Caddy 通过服务名 `api:8000` 访问它。Caddy 只听容器内的 `80`。宿主机上看到的是 `127.0.0.1:HTTP_PORT`。上游 Caddy 镜像声明了 `443`，`docker ps` 里可能列出 `443/tcp`，那不是宿主机端口。
@@ -131,9 +146,9 @@ DEPLOY_HEALTH_URL=https://scores.rarverse.com/health
 
 ```sh
 cd /opt/osu-score-api
-set -a && . ./.env.deploy && set +a
-docker compose --env-file .env.deploy -f compose.yaml ps
-docker compose --env-file .env.deploy -f compose.yaml logs web --tail=200
+set -a && . ./.env && set +a
+docker compose ps
+docker compose logs web --tail=200
 curl -sS -D - -o /dev/null "http://127.0.0.1:${HTTP_PORT}/"
 curl -sS -D - -o /dev/null "http://127.0.0.1:${HTTP_PORT}/health"
 ```
@@ -154,7 +169,7 @@ curl -sS -D - -o /dev/null "http://127.0.0.1:${HTTP_PORT}/health"
 
 HTTPS is your reverse proxy's job. Immich 的 Compose 默认公布 HTTP `2283`，TLS 放在反代上，并要求反代转发 `Host`、`X-Forwarded-For`、`X-Forwarded-Proto`。Vaultwarden 的常见示例只绑定 `127.0.0.1:8080:80`，公网 URL 写在 `DOMAIN`。这个栈是同一形状。
 
-`.env.deploy` 里和端口有关的行：
+`.env` 里和端口有关的行：
 
 ```text
 BIND_ADDR=127.0.0.1
@@ -181,11 +196,11 @@ scores.rarverse.com {
 
 在雷池里为 `scores.rarverse.com` 加站点：
 
-1. 上游协议选 HTTP，地址填 `127.0.0.1`，端口填 `.env.deploy` 的 `HTTP_PORT`（默认 `8080`）。上游不要带路径，雷池不会把路径写进反代。
+1. 上游协议选 HTTP，地址填 `127.0.0.1`，端口填 `.env` 的 `HTTP_PORT`（默认 `8080`）。上游不要带路径，雷池不会把路径写进反代。
 2. 证书只放在雷池上。这个 Compose 栈不提供证书，也不占用宿主机 `443`。
 3. 让雷池把真实访客地址放进 `X-Forwarded-For`，并把 `X-Forwarded-Proto` 设为 `https`。源 IP 用雷池自己看到的连接地址，不要改成信任访客带来的 header。
 4. 人机验证会挡住分享卡片。给这个站点加白名单，放行路径 `/`、`/index.html`、`/og.png`、`/og.svg`。微信的预览请求经常没有稳定的爬虫 UA，只放行 UA 不够。再按请求头 User-Agent 放行 `Discordbot` 和 `Twitterbot`，避免 Discord 和 X 的抓取被挑战页截住。白名单是「放行」，多条规则各自独立；一条规则里的多个条件是同时满足。
-5. 仓库变量 `SITE_URL` 设为 `https://scores.rarverse.com`（没有端口）。然后让部署任务打出新的 web 镜像，或自己用这个地址构建后把新的 `IMAGE_TAG` 写进 `.env.deploy` 再 `up -d`。旧镜像里的 `og:url` 不会跟着变。
+5. 仓库变量 `SITE_URL` 设为 `https://scores.rarverse.com`（没有端口）。然后让部署任务打出新的 web 镜像，或自己用这个地址构建后把新的 `IMAGE_TAG` 写进 `.env` 再 `up -d`。旧镜像里的 `og:url` 不会跟着变。
 
 本机确认：
 
@@ -201,13 +216,13 @@ ss -lntp
 
 选一个主人，不要两个一起改同一组容器。
 
-**GitHub Actions 部署。** 仓库变量 `DEPLOY_ENABLED=true` 时，推 main 会覆盖服务器上的 `compose.yaml` 和 `Caddyfile`，并只改 `.env.deploy` 的 `IMAGE_TAG`。Portainer 只用来看容器和日志。不要在 Portainer 里编辑这个 stack、改环境变量或重新部署，否则下一次 Actions 会把改动盖掉，两边还会抢同一个项目名。
+**GitHub Actions 部署。** 仓库变量 `DEPLOY_ENABLED=true` 时，推 main 会把根 `compose.yaml` 和 `deploy/` 目录覆盖到 `DEPLOY_DIR`，并只改 `.env` 的 `IMAGE_TAG`。Portainer 只用来看容器和日志。不要在 Portainer 里编辑这个 stack、改环境变量或重新部署，否则下一次 Actions 会把改动盖掉，两边还会抢同一个项目名。`DEPLOY_DIR` 必须就是这一个目录。
 
 **Portainer 部署。** 把仓库变量 `DEPLOY_ENABLED` 设为 `false`（或不设成 `true`），让 Actions 不再连这台机器。然后：
 
-1. 在服务器上放好 `/etc/osu-score-api/env` 和 `/opt/osu-score-api/.env.deploy`。
+1. 在服务器上放好 `/etc/osu-score-api/env` 和 `/opt/osu-score-api/.env`。
 2. Portainer → Stacks → Add stack。名称填 `osu-score-api`，与 compose 文件里的 `name:` 一致。
-3. Web editor 粘贴 `deploy/compose.yaml`。环境变量用 `.env.deploy` 里的键，不要另起一个项目名。
+3. Web editor 粘贴 `deploy/compose.yaml`。环境变量用 `.env` 里的键，不要另起一个项目名。
 4. 镜像若是私有的，在 Portainer 里登记 ghcr.io 的只读凭据。
 5. Deploy the stack。之后改端口只在这一处改，再 Update the stack。
 
@@ -215,13 +230,41 @@ ss -lntp
 
 以前如果创建过 `osu-score-api_caddy-data` 或 `osu-score-api_caddy-config`，这个栈不再使用它们。不要用 `down -v` 清理，那会连 `osu-data` 一起删掉。
 
-## 7. 回滚
+## 从 `.env.deploy` 迁移
 
-数据卷不动。把 `/opt/osu-score-api/.env.deploy` 的 `IMAGE_TAG` 改回上一个可用标签，然后：
+旧布局把 `compose.yaml` 和 `Caddyfile` 平铺在 `/opt/osu-score-api`，并用 `docker compose --env-file .env.deploy -f compose.yaml`。新布局是：
+
+```text
+DEPLOY_DIR/compose.yaml
+DEPLOY_DIR/.env
+DEPLOY_DIR/deploy/compose.yaml
+DEPLOY_DIR/deploy/Caddyfile
+```
+
+`DEPLOY_DIR` 仍是原来那个目录，这样项目名和卷 `osu-score-api_osu-data` 不变。只在这个目录里执行 compose。
 
 ```sh
-docker compose --env-file /opt/osu-score-api/.env.deploy -f deploy/compose.yaml pull
-docker compose --env-file /opt/osu-score-api/.env.deploy -f deploy/compose.yaml up -d
+cd /opt/osu-score-api
+# 只有 .env.deploy、还没有 .env 时：
+mv .env.deploy .env
+# 两个都在时不要覆盖 .env。把 .env.deploy 里还缺的键补进 .env，再删掉 .env.deploy。
+# 按 .env.example 补上 BIND_ADDR、HTTP_PORT、COMPOSE_SUBNET、COMPOSE_GATEWAY、
+# WEB_IPV4、TRUSTED_PROXIES、FORWARDED_ALLOW_IPS、VITE_SITE_URL。
+# 删掉不再读取的 COMPOSE_PROFILES、CADDY_MODE、HTTPS_PORT、PUBLIC_HTTPS_PORT、
+# TLS_CERT_DIR、SITE_DOMAIN。密钥仍只在 /etc/osu-score-api/env。
+docker compose pull
+docker compose up -d
+```
+
+下一次 GitHub 部署会拷入新的目录结构。如果当时只有 `.env.deploy`、没有 `.env`，脚本会自动 `mv .env.deploy .env`，再改写其中的 `IMAGE_TAG`。两个文件都在时，脚本保留 `.env`，不动 `.env.deploy`。
+
+## 7. 回滚
+
+数据卷不动。把 `/opt/osu-score-api/.env` 的 `IMAGE_TAG` 改回上一个可用标签，然后：
+
+```sh
+docker compose pull
+docker compose up -d
 ```
 
 再跑一次上面的健康检查。web 镜像如果是用另一个 `SITE_URL` 构建的，回滚标签也会带回当时写进页面的 OG 地址。Caddyfile 随该镜像里的副本一起回去。
@@ -238,15 +281,15 @@ docker compose --env-file /opt/osu-score-api/.env.deploy -f deploy/compose.yaml 
 `api` 已经启动时，把统计文件复制到当前目录：
 
 ```sh
-docker compose --env-file /opt/osu-score-api/.env.deploy -f deploy/compose.yaml cp api:/var/lib/osu-score-api/stats/usage.json ./stats.json
+docker compose cp api:/var/lib/osu-score-api/stats/usage.json ./stats.json
 ```
 
-`--env-file` 与上面的启动命令相同：compose 文件会展开 `IMAGE_TAG`。
+在放了根 `compose.yaml` 和 `.env` 的目录里执行。Compose 会展开 `IMAGE_TAG`。
 
 不要为了清缓存删掉卷 `osu-data`。`docker compose down -v` 和 `docker volume rm` 会把 `usage.json` 和缓存一起删掉。只删除缓存目录，保留 `stats/`：
 
 ```sh
-docker compose --env-file /opt/osu-score-api/.env.deploy -f deploy/compose.yaml exec api rm -rf /var/lib/osu-score-api/cache
+docker compose exec api rm -rf /var/lib/osu-score-api/cache
 ```
 
 下次写入缓存时服务会重新创建该目录。不要删除 `/var/lib/osu-score-api/stats`。
@@ -257,4 +300,4 @@ docker compose --env-file /opt/osu-score-api/.env.deploy -f deploy/compose.yaml 
 
 - 前端：`npm ci --ignore-scripts`，仓库根 `.npmrc` 同样设置了 `ignore-scripts=true`。
 - API：`uv sync --locked --no-dev`，以已提交的 `apps/api/uv.lock` 为准。
-- 不要把 `/etc/osu-score-api/env`、GHCR token 或 `.env.deploy` 提交进 git。
+- 不要把 `/etc/osu-score-api/env`、GHCR token 或 `.env` 提交进 git。
