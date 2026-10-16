@@ -6,8 +6,10 @@
 # gateway, and loopback). X-Forwarded-For is walked from the right, and only
 # that resolved address is sent to the API.
 {
+	auto_https off
 	servers :80 {
 		trusted_proxies static {$TRUSTED_PROXIES:127.0.0.1 172.31.210.1}
+		trusted_proxies_strict
 		client_ip_headers X-Forwarded-For
 	}
 }

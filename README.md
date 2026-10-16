@@ -12,7 +12,29 @@ rarverse 旗下的非官方 fan-made 网页查分器。网站名称为 **Rarsu�
 
 `og:image` 和 `og:url` 在构建时由 `VITE_SITE_URL` 拼成绝对地址，例如 `VITE_SITE_URL=https://scores.example.com` 得到 `https://scores.example.com/og.png`。本地开发不设置该变量时回退为 `/og.png` 和 `/`，页面本身仍可用；发给社交平台的生产构建必须带上站点根地址。模式按钮使用页面内的简易 SVG，选中项为 `#c9b2ff`，当前模式标记的底色是 `#101116`。
 
-## 本地启动
+## Debian / Docker 部署
+
+安装 Docker Engine 和 Compose 插件（Compose ≥ 2.24.0），在仓库根目录执行：
+
+```sh
+docker compose up -d
+```
+
+首次自动构建前后端，默认提供 `http://127.0.0.1:8080`。不需要 GHCR 登录、`IMAGE_TAG` 或预先创建 `/etc` 文件。默认不配置服务端 osu! 凭据，访客仍可在页面填写自己的凭据。
+
+需要共享服务端凭据或修改端口时，先 `cp .env.example .env`，编辑 `.env` 并执行 `chmod 600 .env`，再启动。更新源码后执行 `docker compose up -d --build`。
+
+外部 Nginx、Caddy 或雷池负责域名、HTTPS 和证书，上游填写 `http://127.0.0.1:8080`；项目内部只提供 HTTP，不申请或挂载证书、不占用宿主机 80/443。反代若在独立容器中，不能用该容器自己的 `127.0.0.1` 访问宿主机，连接方式见 [部署说明](deploy/README.md)。
+
+```sh
+docker compose ps
+curl -fsS http://127.0.0.1:8080/health
+docker compose logs --tail=100
+```
+
+数据保存在命名卷 `osu-score-api_osu-data`。已有部署切换前请阅读部署说明中的迁移步骤。
+
+## 本地开发
 
 要求：Python ≥ 3.12、[uv](https://docs.astral.sh/uv/)、Node.js ≥ 20.19、npm。
 
@@ -175,6 +197,7 @@ npm run dev
 # 仓库根目录
 npm run typecheck
 npm run lint
+npm test
 npm run build
 npm run format
 
@@ -197,6 +220,8 @@ uv run pytest
 
 ## 生产与后续
 
-前端 `npm run build` 输出 `apps/web/dist`。自建部署使用 `deploy/compose.yaml`：Caddy 托管静态文件并反代 `/api` 与 `/health`，API 不对宿主机发布端口。步骤、GHCR 登录和回滚见 `deploy/README.md`。不要将 `vite preview` 用作生产服务器。本地仍可用 `uv run uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 1`。生产密钥放在 `/etc/osu-score-api/env`（权限 `600`），缓存和统计放在数据卷 `/var/lib/osu-score-api`，不要写进仓库。
+代码验证、运行观测、统计存储和扩容约束的建议见 [持续开发建议](DEVELOPMENT.md)。
+
+前端 `npm run build` 输出 `apps/web/dist`。自建部署默认使用根目录 `compose.yaml`；`deploy/compose.yaml` 保留给现有 GHCR / GitHub Actions 镜像部署。Caddy 托管静态文件并反代 `/api` 与 `/health`，API 不对宿主机发布端口。步骤和回滚见 `deploy/README.md`。不要将 `vite preview` 用作生产服务器。密钥使用未提交的 `.env`（权限 `600`），也可通过 `API_ENV_FILE=/etc/osu-score-api/env` 复用已有配置；缓存和统计放在数据卷 `/var/lib/osu-score-api`。
 
 已知限制：仅 best、最多 50 条、基础 SR；没有后台自动轮询、recent、mods 后难度或 Pillow 出图。下一步可先加入有缓存的 mods 难度查询，再做 B50 卡片/图片导出；recent 需要同步扩展契约、缓存键和验收。

@@ -1,5 +1,6 @@
 import hashlib
 import json
+import math
 import os
 import tempfile
 import time
@@ -11,7 +12,7 @@ from app.schemas.scores import Ruleset
 
 def normalize_player(value: str) -> str:
     value = value.strip().casefold()
-    return str(int(value)) if value.isascii() and value.isdecimal() else value
+    return (value.lstrip("0") or "0") if value.isascii() and value.isdecimal() else value
 
 
 def score_cache_key(player: str, mode: Ruleset = "mania") -> str:
@@ -59,11 +60,13 @@ class JsonCache:
             path = self.directory / f"{key}.json"
             try:
                 entry = json.loads(path.read_text())
+                if not isinstance(entry, dict) or not isinstance(entry.get("data"), dict):
+                    return None
                 age = time.time() - float(entry["created_at"])
-                if age >= self.ttl:
+                if not math.isfinite(age) or age < 0 or age >= self.ttl:
                     return None
                 return entry["data"], max(0, int(self.ttl - age))
-            except (OSError, ValueError, KeyError, TypeError):
+            except (OSError, ValueError, KeyError, TypeError, OverflowError):
                 return None
 
     def set(self, key: str, data: dict) -> None:

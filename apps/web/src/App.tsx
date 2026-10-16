@@ -140,7 +140,11 @@ export default function App() {
     await fetchScores(name, mode);
   }
 
-  async function fetchScores(name: string, selectedMode: Ruleset) {
+  async function fetchScores(
+    name: string,
+    selectedMode: Ruleset,
+    selectedLimit = limit,
+  ) {
     const credentials = useOwnApi
       ? { clientId: apiClientId.trim(), clientSecret: apiClientSecret.trim() }
       : undefined;
@@ -167,7 +171,7 @@ export default function App() {
         try {
           const response = await getScores(
             name,
-            limit,
+            selectedLimit,
             selectedMode,
             controller.signal,
             credentials,
@@ -214,6 +218,11 @@ export default function App() {
     setMode(next);
     setError("");
     if (result) void fetchScores(result.player.username, next);
+  }
+
+  function changeLimit(next: number) {
+    setLimit(next);
+    if (result) void fetchScores(result.player.username, mode, next);
   }
 
   function cancelWaiting() {
@@ -310,7 +319,7 @@ export default function App() {
               <select
                 id="limit"
                 value={limit}
-                onChange={(event) => setLimit(Number(event.target.value))}
+                onChange={(event) => changeLimit(Number(event.target.value))}
                 disabled={loading}
               >
                 <option value={20}>Top 20</option>

@@ -20,3 +20,7 @@ FROM caddy:2.10.2@sha256:c3d7ee5d2b11f9dc54f947f68a734c84e9c9666c92c88a7f30b9cba
 
 COPY deploy/Caddyfile /etc/caddy/Caddyfile
 COPY --from=build /src/apps/web/dist /srv
+
+# Check both the static site and the API through the same HTTP entry point.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD wget -q -O /dev/null http://127.0.0.1/ && wget -q -O /dev/null http://127.0.0.1/health

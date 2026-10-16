@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Header, Query, Request, Response
+from pydantic import ValidationError
 
 from app.client_ip import client_ip
 from app.schemas.scores import ErrorResponse, Ruleset, ScoresResponse
@@ -12,6 +13,17 @@ from app.services.osu_client import ServiceError
 router = APIRouter(prefix="/api/v1/players", tags=["players"])
 logger = logging.getLogger(__name__)
 NOT_FOUND = "未找到该玩家，请检查用户名或 ID。"
+
+
+def _cached_scores(state, key: str) -> ScoresResponse | None:
+    data = state.cache.get(key)
+    if data is None:
+        return None
+    try:
+        result = ScoresResponse.model_validate(data)
+    except ValidationError:
+        return None
+    return result if result.fetched_at.utcoffset() is not None else None
 
 
 def _remember_missing(state, key: str) -> None:
@@ -48,9 +60,10 @@ def player_scores(
     settings = state.settings
     player_id: str | None = None
     try:
-        name = normalize_player(username)
+        name = username.strip()
         if not name or len(name) > 32 or any(ord(char) < 32 or char in "/\\?#" for char in name):
             raise ServiceError(422, "INVALID_PLAYER", "请输入 1–32 字符的用户名或 ID。")
+        name = normalize_player(name)
         if (osu_client_id is None) != (osu_client_secret is None) or (
             osu_client_secret is not None and not osu_client_secret.strip()
         ):
@@ -78,21 +91,24 @@ def player_scores(
         key = score_cache_key(name, mode)
         missing_key = not_found_cache_key(name)
         cached_missing = state.not_found.get_fresh(missing_key)
-        if cached_missing is not None:
+        if cached_missing is not None and cached_missing[0].get("code") == "PLAYER_NOT_FOUND":
             raise _missing_player("HIT", cached_missing[1])
 
-        data = state.cache.get(key)
+        result = _cached_scores(state, key)
         cache_status = "HIT"
-        if data is None:
+        if result is None:
             # ossapi uses a shared OAuth session. Serialize misses and recheck the cache.
             if not state.fetch_lock.acquire(blocking=False):
                 raise ServiceError(503, "SERVER_BUSY", "当前查询人数较多，请稍候。", retry_after=3)
             try:
                 cached_missing = state.not_found.get_fresh(missing_key)
-                if cached_missing is not None:
+                if (
+                    cached_missing is not None
+                    and cached_missing[0].get("code") == "PLAYER_NOT_FOUND"
+                ):
                     raise _missing_player("HIT", cached_missing[1])
-                data = state.cache.get(key)
-                if data is None:
+                result = _cached_scores(state, key)
+                if result is None:
                     try:
                         if osu_client_id is None:
                             result = state.osu.get_user_scores(name, mode)
@@ -119,7 +135,6 @@ def player_scores(
         response.headers["X-Cache"] = cache_status
         response.headers["Cache-Control"] = "no-store"
         logger.info("Score query cache=%s", cache_status)
-        result = ScoresResponse.model_validate(data)
         age = (datetime.now(UTC) - result.fetched_at).total_seconds()
         response.headers["X-Cache-TTL"] = str(
             max(0, min(settings.cache_timeout, int(settings.cache_timeout - age)))

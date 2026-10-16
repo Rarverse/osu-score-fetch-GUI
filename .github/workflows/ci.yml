@@ -29,6 +29,9 @@ jobs:
       - name: Lint
         run: npm run lint --workspace apps/web
 
+      - name: Test
+        run: npm test
+
       - name: Build
         run: npm run build --workspace apps/web
 
@@ -139,6 +142,8 @@ jobs:
           context: apps/api
           file: apps/api/Dockerfile
           push: false
+          load: true
+          tags: osu-score-api-api:latest
           platforms: linux/amd64
           cache-from: type=gha,scope=api
           cache-to: type=gha,mode=max,scope=api
@@ -150,11 +155,65 @@ jobs:
           context: .
           file: apps/web/Dockerfile
           push: false
+          load: true
+          tags: osu-score-api-web:latest
           platforms: linux/amd64
           build-args: |
             VITE_SITE_URL=${{ env.SITE_URL }}
           cache-from: type=gha,scope=web
           cache-to: type=gha,mode=max,scope=web
+
+      - name: Start Compose and verify HTTP deployment
+        if: steps.dockerfiles.outputs.present == 'true'
+        run: |
+          set -euo pipefail
+          docker compose config --quiet
+          docker compose up -d --no-build --wait --wait-timeout 120
+          python3 - <<'PY'
+          import json
+          import re
+          from urllib.error import HTTPError
+          from urllib.request import HTTPRedirectHandler, build_opener
+
+          class NoRedirect(HTTPRedirectHandler):
+              def redirect_request(self, *args, **kwargs):
+                  return None
+
+          client = build_opener(NoRedirect)
+          origin = "http://127.0.0.1:8080"
+          with client.open(origin + "/", timeout=5) as response:
+              assert response.status == 200
+              assert response.headers.get_content_type() == "text/html"
+              html = response.read().decode()
+          assets = re.findall(r'(?:src|href)="(/assets/[^"?]+)"', html)
+          assert assets, "Built frontend assets missing"
+          for path in assets:
+              with client.open(origin + path, timeout=5) as response:
+                  assert response.status == 200
+                  assert response.headers.get_content_type() != "text/html"
+          with client.open(origin + "/health", timeout=5) as response:
+              assert json.load(response)["status"] == "ok"
+          try:
+              client.open(origin + "/api/v1/players/1/scores", timeout=5)
+          except HTTPError as error:
+              assert error.code == 503
+              assert json.load(error)["error"]["code"] == "NOT_CONFIGURED"
+          else:
+              raise AssertionError("Expected unconfigured API error")
+          PY
+          docker compose exec -T --user osu api python -c \
+            'from pathlib import Path; Path("/var/lib/osu-score-api/cache/deploy-probe").write_text("persisted")'
+          docker compose up -d --no-build --force-recreate --wait --wait-timeout 120
+          docker compose exec -T --user osu api python -c \
+            'from pathlib import Path; p = Path("/var/lib/osu-score-api/cache/deploy-probe"); assert p.read_text() == "persisted"; p.unlink()'
+
+      - name: Compose logs
+        if: failure() && steps.dockerfiles.outputs.present == 'true'
+        run: docker compose logs --no-color --tail=100
+
+      - name: Clean up test stack
+        if: always() && steps.dockerfiles.outputs.present == 'true'
+        run: docker compose down -v
 
   deploy:
     name: deploy
@@ -367,11 +426,11 @@ jobs:
             fi
             echo "Restoring previous IMAGE_TAG"
             write_tag "$prev"
-            docker compose --env-file .env.deploy -f compose.yaml up -d
+            docker compose --env-file .env.deploy -f compose.yaml up -d --wait --wait-timeout 120
           }
           write_tag "$sha"
           if ! docker compose --env-file .env.deploy -f compose.yaml pull \
-            || ! docker compose --env-file .env.deploy -f compose.yaml up -d; then
+            || ! docker compose --env-file .env.deploy -f compose.yaml up -d --wait --wait-timeout 120; then
             restore_prev
             exit 1
           fi

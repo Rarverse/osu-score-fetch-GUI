@@ -1,0 +1,60 @@
+# Source deployment: run `docker compose up -d` from the repository root.
+# TLS terminates at your external reverse proxy, upstream http://127.0.0.1:8080.
+name: osu-score-api
+
+services:
+  api:
+    build: apps/api
+    env_file:
+      - path: ${API_ENV_FILE:-.env}
+        required: false
+    environment:
+      CACHE_PATH: /var/lib/osu-score-api/cache
+      STATS_PATH: /var/lib/osu-score-api/stats/usage.json
+      FORWARDED_ALLOW_IPS: ${WEB_IPV4:-172.31.210.10}
+    command:
+      - uvicorn
+      - app.main:app
+      - --host
+      - "0.0.0.0"
+      - --port
+      - "8000"
+      - --workers
+      - "1"
+      - --no-access-log
+      - --proxy-headers
+      - --forwarded-allow-ips
+      - ${WEB_IPV4:-172.31.210.10}
+    networks:
+      - backend
+    volumes:
+      - osu-data:/var/lib/osu-score-api
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        VITE_SITE_URL: ${VITE_SITE_URL:-}
+    environment:
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-127.0.0.1 ${COMPOSE_GATEWAY:-172.31.210.1}}
+    ports:
+      - "${BIND_ADDR:-127.0.0.1}:${HTTP_PORT:-8080}:80"
+    networks:
+      backend:
+        ipv4_address: ${WEB_IPV4:-172.31.210.10}
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+networks:
+  backend:
+    ipam:
+      config:
+        - subnet: ${COMPOSE_SUBNET:-172.31.210.0/24}
+          gateway: ${COMPOSE_GATEWAY:-172.31.210.1}
+
+volumes:
+  osu-data:
