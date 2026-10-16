@@ -16,7 +16,7 @@ ENV VITE_SITE_URL=${VITE_SITE_URL}
 RUN npm run build --workspace apps/web
 
 # caddy:2.10.2, multi-arch index digest
-FROM caddy:2.10.2@sha256:c3d7ee5d2b11f9dc54f947f68a734c84e9c9666c92c88a7f30b9cba5da182adb
+FROM caddy:2.11.6@sha256:3422ce6de165df66534f9b9ba50efaf457114ec961763cc52f5dbdaac2972d73
 
 COPY deploy/Caddyfile /etc/caddy/Caddyfile
 COPY --from=build /src/apps/web/dist /srv
