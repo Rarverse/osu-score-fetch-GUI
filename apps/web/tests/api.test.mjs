@@ -24,6 +24,7 @@ function loadApi(overrides = {}) {
   const context = {
     Headers,
     DOMException,
+    AbortController,
     setTimeout,
     clearTimeout,
     crypto: webcrypto,
@@ -91,6 +92,67 @@ test("HTTP-date Retry-After is respected", async () => {
     (error) =>
       error.isBusy && error.retryAfter >= 119 && error.retryAfter <= 120,
   );
+});
+
+for (const phase of ["headers", "body"]) {
+  test(`timeout aborts stalled ${phase} and releases timer`, async () => {
+    let expire;
+    let cleared = false;
+    const api = loadApi({
+      setTimeout: (callback, delay) => {
+        assert.equal(delay, 90_000);
+        expire = callback;
+        return 1;
+      },
+      clearTimeout: () => {
+        cleared = true;
+      },
+      fetch: async (_url, { signal }) => {
+        const pending = () =>
+          new Promise((_resolve, reject) => {
+            signal.addEventListener("abort", () =>
+              reject(new DOMException("Aborted", "AbortError")),
+            );
+          });
+        if (phase === "headers") return pending();
+        return { ok: true, json: pending, headers: new Headers() };
+      },
+    });
+    const request = api.getScores(
+      "player",
+      20,
+      "mania",
+      new AbortController().signal,
+    );
+    await new Promise((resolve) => setImmediate(resolve));
+    expire();
+    await assert.rejects(
+      request,
+      (error) => error.code === "REQUEST_TIMEOUT" && !error.isBusy,
+    );
+    assert.equal(cleared, true);
+  });
+}
+
+test("user cancellation aborts fetch and clears its deadline", async () => {
+  let cleared = false;
+  const controller = new AbortController();
+  const api = loadApi({
+    setTimeout: () => 1,
+    clearTimeout: () => {
+      cleared = true;
+    },
+    fetch: (_url, { signal }) =>
+      new Promise((_resolve, reject) => {
+        signal.addEventListener("abort", () =>
+          reject(new DOMException("Aborted", "AbortError")),
+        );
+      }),
+  });
+  const request = api.getScores("player", 20, "mania", controller.signal);
+  controller.abort();
+  await assert.rejects(request, (error) => error.name === "AbortError");
+  assert.equal(cleared, true);
 });
 
 test("automatic mode omits mode and shares resolved cache without manual queries poisoning it", async () => {

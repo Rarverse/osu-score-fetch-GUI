@@ -150,6 +150,11 @@ export default function App() {
     selectedMode: QueryMode,
     selectedLimit = limit,
   ) {
+    request.current?.abort();
+    setLoading(false);
+    setResult(null);
+    setWaiting(null);
+    setCache("");
     setDownloadError("");
     const credentials = useOwnApi
       ? { clientId: apiClientId.trim(), clientSecret: apiClientSecret.trim() }
@@ -165,7 +170,6 @@ export default function App() {
       setError(t("httpsRequired"));
       return;
     }
-    request.current?.abort();
     const controller = new AbortController();
     request.current = controller;
     setLoading(true);
@@ -231,7 +235,7 @@ export default function App() {
     if (result) void fetchScores(result.player.username, mode, next);
   }
 
-  function cancelWaiting() {
+  function cancelQuery() {
     request.current?.abort();
     setWaiting(null);
     setLoading(false);
@@ -451,7 +455,7 @@ export default function App() {
             </div>
           </div>
         )}
-        {waiting && <WaitingPanel waiting={waiting} onCancel={cancelWaiting} />}
+        {waiting && <WaitingPanel waiting={waiting} onCancel={cancelQuery} />}
         {loading && !waiting && (
           <section className="loading-panel" role="status" aria-live="polite">
             <LoaderCircle size={24} className="spin" />
@@ -459,6 +463,9 @@ export default function App() {
               <strong>{t("loadingScores")}</strong>
               <p>{t("loadingMode", { mode: selectedModeLabel })}</p>
             </div>
+            <button type="button" onClick={cancelQuery}>
+              {t("cancelQuery")}
+            </button>
           </section>
         )}
         {result && (

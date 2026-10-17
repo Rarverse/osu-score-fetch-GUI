@@ -103,48 +103,69 @@ export async function getScores(
     headers.set("X-Osu-Client-Id", credentials.clientId);
     headers.set("X-Osu-Client-Secret", credentials.clientSecret);
   }
-  const response = await fetch(
-    `/api/v1/players/${encodeURIComponent(username)}/scores?type=best&limit=${limit}${mode === "auto" ? "" : `&mode=${mode}`}`,
-    { signal, headers },
-  );
-  if (!response.ok) {
-    const body = (await response
-      .json()
-      .catch(() => null)) as ErrorResponse | null;
-    const header = response.headers.get("Retry-After");
-    const seconds =
-      header && /^\d+$/.test(header.trim())
-        ? Number(header)
-        : (Date.parse(header || "") - Date.now()) / 1000;
-    const retryAfter =
-      Number.isFinite(seconds) && seconds > 0 ? Math.ceil(seconds) : 5;
-    throw new ApiError(
-      errorMessage(body?.error?.code || "UNKNOWN_ERROR") +
-        (header ? ` ${t("retryAfter", { seconds: retryAfter })}` : ""),
-      body?.error?.code || "UNKNOWN_ERROR",
-      response.status,
-      retryAfter,
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  signal.addEventListener("abort", abort, { once: true });
+  let timedOut = false;
+  // Allow three bounded upstream requests, including OAuth, before timing out.
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, 90_000);
+  try {
+    const response = await fetch(
+      `/api/v1/players/${encodeURIComponent(username)}/scores?type=best&limit=${limit}${mode === "auto" ? "" : `&mode=${mode}`}`,
+      { signal: controller.signal, headers },
     );
-  }
-  const data = (await response.json()) as ScoresResponse;
-  const ttl = Number(response.headers.get("X-Cache-TTL"));
-  if (Number.isFinite(ttl) && ttl > 0 && !signal.aborted) {
-    const entry = { data, expiresAt: Date.now() + Math.min(60, ttl) * 1000 };
-    for (const alias of [
-      username,
-      data.player.username,
-      String(data.player.user_id),
-    ]) {
-      cache.set(cacheKey(alias, mode, limit), entry);
-      cache.set(cacheKey(alias, data.mode, limit), entry);
+    if (!response.ok) {
+      const body = (await response
+        .json()
+        .catch(() => null)) as ErrorResponse | null;
+      if (controller.signal.aborted)
+        throw new DOMException("Aborted", "AbortError");
+      const header = response.headers.get("Retry-After");
+      const seconds =
+        header && /^\d+$/.test(header.trim())
+          ? Number(header)
+          : (Date.parse(header || "") - Date.now()) / 1000;
+      const retryAfter =
+        Number.isFinite(seconds) && seconds > 0 ? Math.ceil(seconds) : 5;
+      throw new ApiError(
+        errorMessage(body?.error?.code || "UNKNOWN_ERROR") +
+          (header ? ` ${t("retryAfter", { seconds: retryAfter })}` : ""),
+        body?.error?.code || "UNKNOWN_ERROR",
+        response.status,
+        retryAfter,
+      );
     }
-    while (cache.size > 50) {
-      const oldest = cache.keys().next().value;
-      if (oldest !== undefined) cache.delete(oldest);
+    const data = (await response.json()) as ScoresResponse;
+    const ttl = Number(response.headers.get("X-Cache-TTL"));
+    if (Number.isFinite(ttl) && ttl > 0 && !signal.aborted) {
+      const entry = { data, expiresAt: Date.now() + Math.min(60, ttl) * 1000 };
+      for (const alias of [
+        username,
+        data.player.username,
+        String(data.player.user_id),
+      ]) {
+        cache.set(cacheKey(alias, mode, limit), entry);
+        cache.set(cacheKey(alias, data.mode, limit), entry);
+      }
+      while (cache.size > 50) {
+        const oldest = cache.keys().next().value;
+        if (oldest !== undefined) cache.delete(oldest);
+      }
     }
+    return {
+      data,
+      cache: response.headers.get("X-Cache") || "UNKNOWN",
+    };
+  } catch (error) {
+    if (timedOut && !signal.aborted) {
+      throw new ApiError(t("requestTimeout"), "REQUEST_TIMEOUT", 408, 0);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+    signal.removeEventListener("abort", abort);
   }
-  return {
-    data,
-    cache: response.headers.get("X-Cache") || "UNKNOWN",
-  };
 }

@@ -394,68 +394,8 @@ jobs:
             echo "DEPLOY_HEALTH_URL must be an http(s) URL"
             exit 1
           fi
-          ssh deploy "mkdir -p $(printf '%q' "$DEPLOY_DIR")"
-          scp "$COMPOSE_FILE" "deploy:${DEPLOY_DIR}/compose.yaml"
-          scp "$CADDYFILE" "deploy:${DEPLOY_DIR}/Caddyfile"
-          ssh deploy "bash -s" -- "$DEPLOY_DIR" "$IMAGE_TAG" "$HEALTH_MODE" "$HEALTH_URL" "$API_SERVICE" <<'EOF'
-          set -euo pipefail
-          dir=$1
-          sha=$2
-          mode=$3
-          url=$4
-          service=$5
-          cd "$dir"
-          prev=""
-          if [ -f .env.deploy ]; then
-            prev=$(grep -E '^IMAGE_TAG=' .env.deploy | tail -n 1 | cut -d= -f2- | tr -d '\r' || true)
-          fi
-          write_tag() {
-            local tag="$1"
-            local tmp
-            tmp=$(mktemp)
-            if [ -f .env.deploy ]; then
-              grep -v -E '^IMAGE_TAG=' .env.deploy > "$tmp" || true
-            fi
-            printf 'IMAGE_TAG=%s\n' "$tag" >> "$tmp"
-            mv "$tmp" .env.deploy
-          }
-          restore_prev() {
-            if [ -z "$prev" ]; then
-              echo "No previous IMAGE_TAG; leaving the failed tag in .env.deploy"
-              return 0
-            fi
-            echo "Restoring previous IMAGE_TAG"
-            write_tag "$prev"
-            docker compose --env-file .env.deploy -f compose.yaml up -d --wait --wait-timeout 120
-          }
-          write_tag "$sha"
-          if ! docker compose --env-file .env.deploy -f compose.yaml pull \
-            || ! docker compose --env-file .env.deploy -f compose.yaml up -d --wait --wait-timeout 120; then
-            restore_prev
-            exit 1
-          fi
-          ok=0
-          for _ in $(seq 1 30); do
-            code="000"
-            if [ "$mode" = "exec" ]; then
-              # The api image is python slim and has no curl. Same urllib probe as its HEALTHCHECK.
-              # A non-2xx response or a connection error exits before print, so code stays empty.
-              code=$(docker compose --env-file .env.deploy -f compose.yaml exec -T "$service" \
-                python -c 'import sys,urllib.request; print(urllib.request.urlopen(sys.argv[1], timeout=5).status)' \
-                "$url" || true)
-            else
-              code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 5 "$url" || true)
-            fi
-            if [ "$code" = "200" ]; then
-              ok=1
-              break
-            fi
-            sleep 2
-          done
-          if [ "$ok" != "1" ]; then
-            echo "Health check did not return 200"
-            restore_prev
-            exit 1
-          fi
-          echo "Health check returned 200"
-          EOF
+          stage="${DEPLOY_DIR}/.incoming-${IMAGE_TAG}"
+          ssh deploy "mkdir -p $(printf '%q' "$stage")"
+          scp "$COMPOSE_FILE" "deploy:${stage}/compose.yaml"
+          scp "$CADDYFILE" "deploy:${stage}/Caddyfile"
+          ssh deploy "bash -s" -- "$DEPLOY_DIR" "$IMAGE_TAG" "$HEALTH_MODE" "$HEALTH_URL" "$API_SERVICE" < deploy/deploy.sh

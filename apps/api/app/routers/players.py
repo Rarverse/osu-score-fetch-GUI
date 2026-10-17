@@ -91,24 +91,29 @@ def player_scores(
 
         key = score_cache_key(name, mode)
         missing_key = not_found_cache_key(name)
+        result = _cached_scores(state, key)
         cached_missing = state.not_found.get_fresh(missing_key)
-        if cached_missing is not None and cached_missing[0].get("code") == "PLAYER_NOT_FOUND":
+        if (
+            result is None
+            and cached_missing is not None
+            and cached_missing[0].get("code") == "PLAYER_NOT_FOUND"
+        ):
             raise _missing_player("HIT", cached_missing[1])
 
-        result = _cached_scores(state, key)
         cache_status = "HIT"
         if result is None:
             # ossapi uses a shared OAuth session. Serialize misses and recheck the cache.
             if not state.fetch_lock.acquire(blocking=False):
                 raise ServiceError(503, "SERVER_BUSY", "当前查询人数较多，请稍候。", retry_after=3)
             try:
+                result = _cached_scores(state, key)
                 cached_missing = state.not_found.get_fresh(missing_key)
                 if (
-                    cached_missing is not None
+                    result is None
+                    and cached_missing is not None
                     and cached_missing[0].get("code") == "PLAYER_NOT_FOUND"
                 ):
                     raise _missing_player("HIT", cached_missing[1])
-                result = _cached_scores(state, key)
                 if result is None:
                     try:
                         if osu_client_id is None:
@@ -123,9 +128,15 @@ def player_scores(
                             error.cache = "MISS"
                             error.cache_ttl = settings.negative_cache_ttl
                         raise
+                    aliases = {name, str(result.player.user_id), result.player.username}
+                    for alias in aliases:
+                        try:
+                            state.not_found.delete(not_found_cache_key(alias))
+                        except OSError:
+                            logger.warning("Negative cache invalidation failed")
                     data = result.model_dump(mode="json")
                     try:
-                        for alias in {name, str(result.player.user_id), result.player.username}:
+                        for alias in aliases:
                             state.cache.set(score_cache_key(alias, mode), data)
                             if mode is None:
                                 state.cache.set(score_cache_key(alias, result.mode), data)

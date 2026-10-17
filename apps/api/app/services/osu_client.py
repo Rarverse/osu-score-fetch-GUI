@@ -115,6 +115,7 @@ class OsuClient:
         client_id: int | None = None,
         client_secret: str | None = None,
     ) -> ScoresResponse:
+        api = None
         try:
             # Check headroom for the whole lookup while the route holds the fetch lock.
             has_cached_token = (
@@ -160,6 +161,19 @@ class OsuClient:
         except UpstreamBusy as error:
             raise ServiceError(
                 503, "UPSTREAM_BUSY", "查询服务正在等待 osu! 请求额度。", error.retry_after
+            ) from None
+        except requests.HTTPError as error:
+            if (
+                error.response is not None
+                and error.response.status_code == 401
+                and api is not None
+                and api is self.client
+            ):
+                self.client = None
+                self.expires_at = 0.0
+                api.session.close()
+            raise ServiceError(
+                502, "UPSTREAM_ERROR", "osu! 服务暂时无法访问，请稍后重试。"
             ) from None
         except ServiceError:
             raise

@@ -69,6 +69,10 @@ class JsonCache:
             except (OSError, ValueError, KeyError, TypeError, OverflowError):
                 return None
 
+    def delete(self, key: str) -> None:
+        with self.lock:
+            (self.directory / f"{key}.json").unlink(missing_ok=True)
+
     def set(self, key: str, data: dict) -> None:
         with self.lock:
             self._cleanup()

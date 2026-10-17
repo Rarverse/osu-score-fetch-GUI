@@ -76,20 +76,17 @@ class UsageStats:
     def _load(self) -> dict:
         try:
             payload = json.loads(self.path.read_text())
-        except (OSError, ValueError, TypeError):
-            payload = {}
-        if not isinstance(payload, dict):
-            payload = {}
-        salt = payload.get("salt")
-        if not isinstance(salt, str) or len(salt) < 16:
-            salt = os.urandom(16).hex()
-        visitors = payload.get("visitors")
-        days = payload.get("days")
-        return {
-            "salt": salt,
-            "visitors": visitors if isinstance(visitors, dict) else {},
-            "days": days if isinstance(days, dict) else {},
-        }
+        except FileNotFoundError:
+            return {"salt": os.urandom(16).hex(), "visitors": {}, "days": {}}
+        if (
+            not isinstance(payload, dict)
+            or not isinstance(payload.get("salt"), str)
+            or len(payload["salt"]) < 16
+            or not isinstance(payload.get("visitors"), dict)
+            or not isinstance(payload.get("days"), dict)
+        ):
+            raise ValueError("Invalid usage statistics file")
+        return payload
 
     def _save(self, payload: dict) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
