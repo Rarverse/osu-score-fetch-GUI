@@ -15,9 +15,9 @@ def normalize_player(value: str) -> str:
     return (value.lstrip("0") or "0") if value.isascii() and value.isdecimal() else value
 
 
-def score_cache_key(player: str, mode: Ruleset = "mania") -> str:
+def score_cache_key(player: str, mode: Ruleset | None = None) -> str:
     # Cache the full best 50 once; limit is a response slice, not a new upstream query.
-    raw = f"v1:{mode}:best:50:{normalize_player(player)}"
+    raw = f"v1:{mode or 'auto'}:best:50:{normalize_player(player)}"
     return hashlib.sha256(raw.encode()).hexdigest()
 
 

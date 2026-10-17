@@ -12,7 +12,7 @@ from app.services.usage import UsageStats
 
 def _scores(mode="mania", user_id=123, username="SecretPlayerZZ"):
     return ScoresResponse(
-        mode=mode,
+        mode=mode or "mania",
         player=Player(
             user_id=user_id,
             username=username,

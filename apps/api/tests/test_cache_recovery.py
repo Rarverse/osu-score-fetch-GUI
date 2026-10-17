@@ -48,7 +48,7 @@ def test_invalid_cache_is_refetched_and_repaired(tmp_path, bad_data, negative_ca
     def fetch(name, mode):
         calls.append((name, mode))
         return ScoresResponse(
-            mode=mode,
+            mode=mode or "mania",
             player=Player(
                 user_id=123,
                 username="Player",
@@ -78,4 +78,4 @@ def test_invalid_cache_is_refetched_and_repaired(tmp_path, bad_data, negative_ca
     assert response.headers["X-Cache"] == "MISS"
     assert response.json()["player"]["user_id"] == 123
     assert client.get(url).headers["X-Cache"] == "HIT"
-    assert calls == [("player", "mania")]
+    assert calls == [("player", None)]

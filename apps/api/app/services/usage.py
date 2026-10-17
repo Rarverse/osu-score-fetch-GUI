@@ -35,7 +35,7 @@ class UsageStats:
     def record(
         self,
         *,
-        mode: Ruleset,
+        mode: Ruleset | None,
         success: bool,
         player_id: str | None,
         visitor_id: str | None,

@@ -1,5 +1,5 @@
 import { errorMessage, t } from "./i18n";
-import type { ErrorResponse, Ruleset, ScoresResponse } from "./types";
+import type { ErrorResponse, QueryMode, ScoresResponse } from "./types";
 
 interface CachedScores {
   data: ScoresResponse;
@@ -40,7 +40,7 @@ function visitorId(): string {
   return created;
 }
 
-function cacheKey(username: string, mode: Ruleset, limit: number): string {
+function cacheKey(username: string, mode: QueryMode, limit: number): string {
   const name = username.trim().toLowerCase();
   const normalized = /^\d+$/.test(name) ? name.replace(/^0+(?=\d)/, "") : name;
   return JSON.stringify([normalized, mode, limit]);
@@ -86,7 +86,7 @@ export function waitForRetry(
 export async function getScores(
   username: string,
   limit: number,
-  mode: Ruleset,
+  mode: QueryMode,
   signal: AbortSignal,
   credentials?: { clientId: string; clientSecret: string },
 ) {
@@ -104,7 +104,7 @@ export async function getScores(
     headers.set("X-Osu-Client-Secret", credentials.clientSecret);
   }
   const response = await fetch(
-    `/api/v1/players/${encodeURIComponent(username)}/scores?type=best&limit=${limit}&mode=${mode}`,
+    `/api/v1/players/${encodeURIComponent(username)}/scores?type=best&limit=${limit}${mode === "auto" ? "" : `&mode=${mode}`}`,
     { signal, headers },
   );
   if (!response.ok) {
@@ -136,6 +136,7 @@ export async function getScores(
       String(data.player.user_id),
     ]) {
       cache.set(cacheKey(alias, mode, limit), entry);
+      cache.set(cacheKey(alias, data.mode, limit), entry);
     }
     while (cache.size > 50) {
       const oldest = cache.keys().next().value;

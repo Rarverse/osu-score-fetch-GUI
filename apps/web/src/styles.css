@@ -1044,3 +1044,31 @@ footer a:hover {
     transition: none;
   }
 }
+
+.download-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.download-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border: 1px solid #c9b2ff40;
+  border-radius: 7px;
+  background: #242030;
+  color: #d9caff;
+  font-size: 12px;
+}
+.download-actions p {
+  color: #f3a7ba;
+  font-size: 12px;
+  margin: 0;
+}
+.search-options,
+.mode-tabs {
+  flex-wrap: wrap;
+}

@@ -111,7 +111,7 @@ class OsuClient:
     def get_user_scores(
         self,
         username: str,
-        mode: Ruleset = "mania",
+        mode: Ruleset | None = None,
         client_id: int | None = None,
         client_secret: str | None = None,
     ) -> ScoresResponse:
@@ -131,13 +131,14 @@ class OsuClient:
                 else self.get_ossapi_client(client_id, client_secret)
             )
             try:
-                user = api.user(username, mode=GameMode(mode))
+                user = api.user(username, mode=GameMode(mode) if mode else None)
             except requests.HTTPError as error:
                 if error.response is not None and error.response.status_code == 404:
                     raise ServiceError(
                         404, "PLAYER_NOT_FOUND", "未找到该玩家，请检查用户名或 ID。"
                     ) from None
                 raise
+            mode = GameMode(mode or user.playmode).value
             scores = api.user_scores(
                 user.id, ScoreType.BEST, mode=GameMode(mode), limit=50, include_fails=False
             )

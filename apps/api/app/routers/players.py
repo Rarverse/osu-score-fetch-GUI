@@ -51,7 +51,7 @@ def player_scores(
     response: Response,
     type: Literal["best"] = "best",
     limit: Annotated[int, Query(ge=1, le=50)] = 20,
-    mode: Ruleset = "mania",
+    mode: Ruleset | None = None,
     osu_client_id: Annotated[int | None, Header(alias="X-Osu-Client-Id", gt=0)] = None,
     osu_client_secret: Annotated[str | None, Header(alias="X-Osu-Client-Secret")] = None,
     visitor_id: Annotated[str | None, Header(alias="X-Visitor-Id")] = None,
@@ -59,6 +59,7 @@ def player_scores(
     state = request.app.state
     settings = state.settings
     player_id: str | None = None
+    resolved_mode = mode
     try:
         name = username.strip()
         if not name or len(name) > 32 or any(ord(char) < 32 or char in "/\\?#" for char in name):
@@ -126,6 +127,8 @@ def player_scores(
                     try:
                         for alias in {name, str(result.player.user_id), result.player.username}:
                             state.cache.set(score_cache_key(alias, mode), data)
+                            if mode is None:
+                                state.cache.set(score_cache_key(alias, result.mode), data)
                         cache_status = "MISS"
                     except OSError:
                         cache_status = "BYPASS"
@@ -140,11 +143,12 @@ def player_scores(
             max(0, min(settings.cache_timeout, int(settings.cache_timeout - age)))
         )
         player_id = str(result.player.user_id)
+        resolved_mode = result.mode
         return result.model_copy(update={"scores": result.scores[:limit]})
     finally:
         try:
             state.stats.record(
-                mode=mode,
+                mode=resolved_mode,
                 success=player_id is not None,
                 player_id=player_id,
                 visitor_id=visitor_id,

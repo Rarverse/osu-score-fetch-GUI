@@ -2,7 +2,9 @@
 
 rarverse 旗下的非官方 fan-made 网页查分器。网站名称为 **Rarsu查分器**。输入玩家用户名或 ID，查看 **osu! / taiko / catch / mania best performance**、pp、accuracy、mods、基础 SR、rank 和 combo。与 peppy / osu! 无隶属关系。
 
-支持四种模式切换，默认 mania。按后续要求扩展了原始 mania MVP；没有账号系统或批量抓取接口。
+支持四种模式切换，默认使用玩家在 osu! 资料中设置的首选游玩模式；也可手动指定模式。没有账号系统或批量抓取接口。
+
+查询成功后可点击「下载 B50 图片」，保存双列 PNG，包含玩家信息及最多 50 条最佳成绩。页面显示 Top 20 时会先获取当前玩家、当前结果模式的 Top 50；不足 50 条则按实际数量导出。图片在浏览器本地生成，封面或头像加载失败时显示占位图。
 
 界面按浏览器语言偏好自动选择中文或英文（识别 `zh-*` / `en-*`，无匹配时使用英文），包括标题、输入提示、错误、等待页和成绩说明。译文位于 `apps/web/src/i18n.ts`。
 
@@ -93,7 +95,7 @@ npm run dev
 
 浏览器把随机匿名 ID 放在 `localStorage`（键 `rarsu-visitor-id`），只在成绩请求上通过 `X-Visitor-Id` 发送。服务端保存的是该 ID 和成功查询所得玩家 ID 的加盐 SHA-256，用来去重和判断回访；统计文件里没有原始用户名、原始访客 ID 或 IP。同一访客如果在更早的 UTC 日期出现过，当天记为回访一次，同一天多次查询不重复累加。
 
-每天的汇总包含：查询总数、成功查询的去重玩家数、各模式查询数、回访访客数。404、限流和其他失败只计入查询总数和对应模式，不计入去重玩家。成功查询按玩家 ID 去重，所以用用户名或数字 ID 查到同一个人只算一个玩家。
+每天的汇总包含：查询总数、成功查询的去重玩家数、各模式查询数、回访访客数。404、限流和其他失败只计入查询总数和已指定的模式（自动模式未解析成功时只计总数），不计入去重玩家。成功查询按玩家 ID 去重，所以用用户名或数字 ID 查到同一个人只算一个玩家。
 
 默认路径是 `STATS_PATH`（`apps/api/data/cache/usage.json`）。`apps/api/data/cache/` 和 `data/cache/` 已写入 `.gitignore`，不要提交统计文件。生产环境把 `CACHE_PATH` 和 `STATS_PATH` 指到 `/var/lib/osu-score-api/`，见 `deploy/README.md`。写入使用进程内锁和原子替换，只适合单 worker；统计写失败不影响查询结果。
 
@@ -106,7 +108,7 @@ npm run dev
 `GET /api/v1/players/{username}/scores?type=best&limit=20&mode=mania`
 
 - `username`：URL 编码后的用户名或 ID，去除首尾空格，大小写不敏感。
-- `mode`：`osu` / `taiko` / `fruits` / `mania`，默认 `mania`。UI 的 catch 使用 API 值 `fruits`。切换模式会重新查询当前已展示的玩家。
+- `mode`：可选 `osu` / `taiko` / `fruits` / `mania`；省略时读取玩家资料的 `playmode`，玩家统计和成绩均使用该模式。UI 的 catch 使用 API 值 `fruits`。切换模式会重新查询当前已展示的玩家。
 - `type`：仅 `best`；不提供分页、recent 或批量接口。
 - `limit`：1–50，默认 20。一次上游最多拉 50 条，返回前按 limit 切片。
 - 响应头 `X-Cache-TTL`：当前结果剩余可复用秒数，供浏览器缓存使用。
@@ -161,7 +163,7 @@ npm run dev
 
 ## 缓存与限流
 
-`services/cache.py` 以 SHA-256 键保存 `.cache/<hash>.json`，内容是 `created_at` 和结构化响应 `data`。键包含契约版本、所选模式、best、最多 50 条和规范化玩家标识。首尾空格、大小写、数字 ID 的前导零会归一化；成功查询后用户名和 ID 均写入同一份结果，Top 20 / Top 50 共用缓存。写入使用原子替换；默认 **60 秒内同玩家同模式的重复查询合并复用**，超过窗口后由下次主动查询拉取新成绩，无后台轮询。过期或损坏文件视为 miss，不用过期成绩掩盖上游失败。
+`services/cache.py` 以 SHA-256 键保存 `.cache/<hash>.json`，内容是 `created_at` 和结构化响应 `data`。键包含契约版本、所选模式（或独立的 auto 键）、best、最多 50 条和规范化玩家标识。自动查询同时缓存到解析出的模式，手动模式查询不会覆盖 auto 键。首尾空格、大小写、数字 ID 的前导零会归一化；成功查询后用户名和 ID 均写入同一份结果，Top 20 / Top 50 共用缓存。写入使用原子替换；默认 **60 秒内同玩家同模式的重复查询合并复用**，超过窗口后由下次主动查询拉取新成绩，无后台轮询。过期或损坏文件视为 miss，不用过期成绩掩盖上游失败。
 
 服务器文件默认保留 **180 天**，再次刷新会覆盖该玩家/模式的旧结果，不是成绩历史归档。查询或写入时至多每小时扫描清理一次超过保留期的文件；服务完全空闲时会在下一次缓存操作中清理。60 秒刷新合并窗口和 180 天文件保留期分别配置，避免把半年前的成绩显示为最新。官方也将一分钟内反复轮询同一用户列为不当使用，因此保留最小 60 秒合并窗口。
 
@@ -224,4 +226,4 @@ uv run pytest
 
 前端 `npm run build` 输出 `apps/web/dist`。自建部署默认使用根目录 `compose.yaml`；`deploy/compose.yaml` 保留给现有 GHCR / GitHub Actions 镜像部署。Caddy 托管静态文件并反代 `/api` 与 `/health`，API 不对宿主机发布端口。步骤和回滚见 `deploy/README.md`。不要将 `vite preview` 用作生产服务器。密钥使用未提交的 `.env`（权限 `600`），也可通过 `API_ENV_FILE=/etc/osu-score-api/env` 复用已有配置；缓存和统计放在数据卷 `/var/lib/osu-score-api`。
 
-已知限制：仅 best、最多 50 条、基础 SR；没有后台自动轮询、recent、mods 后难度或 Pillow 出图。下一步可先加入有缓存的 mods 难度查询，再做 B50 卡片/图片导出；recent 需要同步扩展契约、缓存键和验收。
+已知限制：仅 best、最多 50 条、基础 SR；没有后台自动轮询、recent、mods 后难度或 Pillow 出图。下一步可先加入有缓存的 mods 难度查询，再扩展 B50 图片样式；recent 需要同步扩展契约、缓存键和验收。

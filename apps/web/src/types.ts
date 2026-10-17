@@ -1,4 +1,5 @@
 export type Ruleset = "osu" | "taiko" | "fruits" | "mania";
+export type QueryMode = Ruleset | "auto";
 
 export const modeLabels: Record<Ruleset, string> = {
   osu: "osu!",

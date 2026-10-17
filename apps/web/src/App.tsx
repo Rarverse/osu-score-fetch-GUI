@@ -5,6 +5,7 @@ import {
   Circle,
   CircleAlert,
   Command,
+  Download,
   ExternalLink,
   Keyboard,
   LoaderCircle,
@@ -15,12 +16,14 @@ import {
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import Markdown from "react-markdown";
 import { ApiError, getScores, waitForRetry } from "./api";
+import { renderB50, saveB50 } from "./b50";
 import introEn from "./content/intro.en.md?raw";
 import intro from "./content/intro.md?raw";
 import { language, locale, t } from "./i18n";
 import ModeIcon from "./ModeIcon";
 import {
   modeLabels,
+  type QueryMode,
   type Ruleset,
   type Score,
   type ScoresResponse,
@@ -104,7 +107,9 @@ export default function App() {
   const [apiClientId, setApiClientId] = useState("");
   const [apiClientSecret, setApiClientSecret] = useState("");
   const [limit, setLimit] = useState(20);
-  const [mode, setMode] = useState<Ruleset>("mania");
+  const [mode, setMode] = useState<QueryMode>("auto");
+  const [exporting, setExporting] = useState(false);
+  const [downloadError, setDownloadError] = useState("");
   const [loading, setLoading] = useState(false);
   const [waiting, setWaiting] = useState<WaitingState | null>(null);
   const [error, setError] = useState("");
@@ -142,9 +147,10 @@ export default function App() {
 
   async function fetchScores(
     name: string,
-    selectedMode: Ruleset,
+    selectedMode: QueryMode,
     selectedLimit = limit,
   ) {
+    setDownloadError("");
     const credentials = useOwnApi
       ? { clientId: apiClientId.trim(), clientSecret: apiClientSecret.trim() }
       : undefined;
@@ -213,7 +219,7 @@ export default function App() {
     }
   }
 
-  function changeMode(next: Ruleset) {
+  function changeMode(next: QueryMode) {
     if (next === mode) return;
     setMode(next);
     setError("");
@@ -231,6 +237,44 @@ export default function App() {
     setLoading(false);
   }
 
+  async function downloadB50() {
+    if (!result || exporting) return;
+    const controller = new AbortController();
+    request.current = controller;
+    setExporting(true);
+    setDownloadError("");
+    try {
+      const data =
+        limit === 50
+          ? result
+          : (
+              await getScores(
+                String(result.player.user_id),
+                50,
+                result.mode,
+                controller.signal,
+                useOwnApi
+                  ? {
+                      clientId: apiClientId.trim(),
+                      clientSecret: apiClientSecret.trim(),
+                    }
+                  : undefined,
+              )
+            ).data;
+      const blob = await renderB50(data);
+      if (!controller.signal.aborted) saveB50(blob, data);
+    } catch (failure) {
+      if (!controller.signal.aborted)
+        setDownloadError(
+          failure instanceof ApiError ? failure.message : t("downloadFailed"),
+        );
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  const selectedModeLabel =
+    mode === "auto" ? t("defaultMode") : modeLabels[mode];
   const customIntro = language === "zh" ? intro : introEn;
 
   return (
@@ -276,14 +320,18 @@ export default function App() {
                 placeholder={t("playerPlaceholder")}
                 autoComplete="off"
                 maxLength={32}
-                disabled={loading}
+                disabled={loading || exporting}
                 required
               />
               <kbd>
                 <Command size={11} /> K
               </kbd>
             </div>
-            <button className="search-button" disabled={loading} type="submit">
+            <button
+              className="search-button"
+              disabled={loading || exporting}
+              type="submit"
+            >
               {loading ? (
                 <LoaderCircle size={17} className="spin" />
               ) : (
@@ -296,18 +344,30 @@ export default function App() {
               <div
                 className="mode-badge"
                 role="img"
-                aria-label={t("currentMode", { mode: modeLabels[mode] })}
+                aria-label={t("currentMode", { mode: selectedModeLabel })}
               >
-                <ModeIcon mode={mode} />
+                {mode === "auto" ? (
+                  <Circle size={14} />
+                ) : (
+                  <ModeIcon mode={mode} />
+                )}
               </div>
               <fieldset className="mode-tabs">
                 <legend className="sr-only">{t("mode")}</legend>
+                <button
+                  type="button"
+                  aria-pressed={mode === "auto"}
+                  disabled={loading || exporting}
+                  onClick={() => changeMode("auto")}
+                >
+                  {t("defaultMode")}
+                </button>
                 {(Object.keys(modeLabels) as Ruleset[]).map((value) => (
                   <button
                     type="button"
                     key={value}
                     aria-pressed={mode === value}
-                    disabled={loading}
+                    disabled={loading || exporting}
                     onClick={() => changeMode(value)}
                   >
                     <ModeIcon mode={value} />
@@ -320,7 +380,7 @@ export default function App() {
                 id="limit"
                 value={limit}
                 onChange={(event) => changeLimit(Number(event.target.value))}
-                disabled={loading}
+                disabled={loading || exporting}
               >
                 <option value={20}>Top 20</option>
                 <option value={50}>Top 50</option>
@@ -397,7 +457,7 @@ export default function App() {
             <LoaderCircle size={24} className="spin" />
             <div>
               <strong>{t("loadingScores")}</strong>
-              <p>{t("loadingMode", { mode: modeLabels[mode] })}</p>
+              <p>{t("loadingMode", { mode: selectedModeLabel })}</p>
             </div>
           </section>
         )}
@@ -477,6 +537,22 @@ export default function App() {
                     ? t("cached")
                     : t("fetched")}
               </span>
+            </div>
+            <div className="download-actions">
+              <button
+                type="button"
+                className="download-button"
+                disabled={exporting || !result.scores.length}
+                onClick={() => void downloadB50()}
+              >
+                {exporting ? (
+                  <LoaderCircle size={16} className="spin" />
+                ) : (
+                  <Download size={16} />
+                )}
+                {exporting ? t("downloadingB50") : t("downloadB50")}
+              </button>
+              {downloadError && <p role="alert">{downloadError}</p>}
             </div>
             {result.scores.length ? (
               <div className="score-list">

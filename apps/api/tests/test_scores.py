@@ -59,7 +59,7 @@ def test_query_refreshes_after_60_seconds_and_cached_queries_bypass_busy_lock(
     def fetch(name, mode):
         calls.append(name)
         return ScoresResponse(
-            mode=mode,
+            mode=mode or "mania",
             player=Player(
                 user_id=123,
                 username="Player",
@@ -357,4 +357,4 @@ def test_other_upstream_errors_are_not_negatively_cached(tmp_path):
     url = "/api/v1/players/Player/scores"
     assert client.get(url).status_code == 502
     assert client.get(url).status_code == 502
-    assert calls == ["mania", "mania"]
+    assert calls == [None, None]
