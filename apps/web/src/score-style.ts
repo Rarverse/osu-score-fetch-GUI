@@ -11,8 +11,10 @@ export function gradeTitle(rank: string): string {
 }
 
 export function starBackground(rating: number | null): string | undefined {
-  // The official dark blue/purple spectrum needs a light backing on a dark UI.
-  return rating !== null && rating >= 6.5 && rating < 9 ? "#f1eff7" : undefined;
+  // Keep the official purple/blue/black colours readable on a dark UI.
+  return rating !== null && Number.isFinite(rating) && rating >= 6.5
+    ? "#f1eff7"
+    : undefined;
 }
 
 // Official osu-web colour stops and gamma, independently interpolated here:
@@ -30,19 +32,11 @@ const difficultyStops: [number, string][] = [
   [7.7, "#18158e"],
   [9, "#000000"],
 ];
-const highStarTextStops: [number, string][] = [
-  [9, "#f6f05c"],
-  [9.9, "#ff8068"],
-  [10.6, "#ff4e6f"],
-  [11.5, "#c645b8"],
-  [12.4, "#6563de"],
-];
 
 export function starColor(rating: number | null): string {
   if (rating === null || !Number.isFinite(rating) || rating < 0.1)
     return "#aaaaaa";
-  // 9★+ badges are black on osu-web; use their official foreground on our dark UI.
-  const stops = rating >= 9 ? highStarTextStops : difficultyStops;
+  const stops = difficultyStops;
   const upper = stops.findIndex(([value]) => rating <= value);
   if (upper === 0) return stops[0][1];
   if (upper < 0) return stops[stops.length - 1][1];

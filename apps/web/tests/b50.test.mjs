@@ -216,7 +216,7 @@ test("stars follow official colours while mod labels keep their own colour", asy
   const stars = renderer.labels.filter(({ value }) => value.endsWith("★"));
   assert.deepEqual(
     stars.map(({ color }) => color),
-    ["#4fffd5", "#ff4e6f", "#f6f05c"],
+    ["#4fffd5", "#ff4e6f", "#000000"],
   );
   assert.ok(
     renderer.labels

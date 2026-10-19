@@ -33,7 +33,7 @@ test("API silver grades display official S/SS letters and names", () => {
     assert.equal(gradeLabel(grade), grade);
 });
 
-test("official star colour stops, gamma interpolation and high-star foregrounds", () => {
+test("official star colour stops and gamma interpolation clamp to black at 9 stars", () => {
   for (const [rating, color] of [
     [0.1, "#4290fb"],
     [1.25, "#4fc0ff"],
@@ -45,12 +45,12 @@ test("official star colour stops, gamma interpolation and high-star foregrounds"
     [5.8, "#c645b8"],
     [6.7, "#6563de"],
     [7.7, "#18158e"],
-    [9, "#f6f05c"],
-    [9.9, "#ff8068"],
-    [10.6, "#ff4e6f"],
-    [11.5, "#c645b8"],
-    [12.4, "#6563de"],
-    [20, "#6563de"],
+    [9, "#000000"],
+    [9.9, "#000000"],
+    [10.6, "#000000"],
+    [11.5, "#000000"],
+    [12.4, "#000000"],
+    [20, "#000000"],
   ])
     assert.equal(starColor(rating), color, `${rating} stars`);
   assert.equal(starColor(3.75), "#fbc262");
@@ -60,8 +60,8 @@ test("official star colour stops, gamma interpolation and high-star foregrounds"
 
 test("dark high-star text keeps official colours on a light backing", () => {
   assert.equal(starColor(7.7), "#18158e");
-  for (const rating of [6.5, 7.7, 8.99])
+  for (const rating of [6.5, 7.7, 8.99, 9, 12.4, 20])
     assert.equal(starBackground(rating), "#f1eff7");
-  for (const rating of [null, 0, 4.2, 6.49, 9, 12.4])
+  for (const rating of [null, 0, 4.2, 6.49, Infinity])
     assert.equal(starBackground(rating), undefined);
 });
