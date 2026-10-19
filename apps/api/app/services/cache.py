@@ -1,5 +1,6 @@
 import hashlib
 import json
+import logging
 import math
 import os
 import tempfile
@@ -7,7 +8,10 @@ import time
 from pathlib import Path
 from threading import Lock
 
+from app.logging_setup import safe_error_fields
 from app.schemas.scores import Ruleset
+
+logger = logging.getLogger(__name__)
 
 
 def normalize_player(value: str) -> str:
@@ -44,7 +48,8 @@ class JsonCache:
             try:
                 if now - path.stat().st_mtime >= self.retention:
                     path.unlink(missing_ok=True)
-            except OSError:
+            except OSError as error:
+                logger.warning("cache_cleanup_failed", extra={"fields": safe_error_fields(error)})
                 continue
 
     def get(self, key: str) -> dict | None:
@@ -61,12 +66,26 @@ class JsonCache:
             try:
                 entry = json.loads(path.read_text())
                 if not isinstance(entry, dict) or not isinstance(entry.get("data"), dict):
+                    logger.warning(
+                        "cache_entry_invalid", extra={"fields": {"reason": "invalid_structure"}}
+                    )
                     return None
                 age = time.time() - float(entry["created_at"])
-                if not math.isfinite(age) or age < 0 or age >= self.ttl:
+                if not math.isfinite(age) or age < 0:
+                    logger.warning(
+                        "cache_entry_invalid", extra={"fields": {"reason": "invalid_timestamp"}}
+                    )
+                    return None
+                if age >= self.ttl:
                     return None
                 return entry["data"], max(0, int(self.ttl - age))
-            except (OSError, ValueError, KeyError, TypeError, OverflowError):
+            except FileNotFoundError:
+                return None
+            except OSError as error:
+                logger.warning("cache_read_failed", extra={"fields": safe_error_fields(error)})
+                return None
+            except (ValueError, KeyError, TypeError, OverflowError) as error:
+                logger.warning("cache_entry_invalid", extra={"fields": safe_error_fields(error)})
                 return None
 
     def delete(self, key: str) -> None:

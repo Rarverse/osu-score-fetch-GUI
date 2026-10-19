@@ -37,6 +37,9 @@ class RateLimiter:
                             "fields": {
                                 "scope": key.split(":", 1)[0],
                                 "retry_after": retry_after,
+                                "limit": limit,
+                                "used": len(bucket),
+                                "window_seconds": self.window,
                             }
                         },
                     )
@@ -83,6 +86,9 @@ class UpstreamLimiter:
                         "fields": {
                             "budget": self.budget,
                             "retry_after": retry_after,
+                            "limit": self.limit,
+                            "used": len(self.requests),
+                            "required_requests": needed,
                             "reason": "upstream_cooldown"
                             if self.cooldown_until > time.monotonic()
                             else "budget_exhausted",
@@ -103,6 +109,8 @@ class UpstreamLimiter:
                         "fields": {
                             "budget": self.budget,
                             "retry_after": retry_after,
+                            "limit": self.limit,
+                            "used": len(self.requests),
                             "reason": "upstream_cooldown"
                             if self.cooldown_until > time.monotonic()
                             else "budget_exhausted",
@@ -111,7 +119,15 @@ class UpstreamLimiter:
                 )
                 raise UpstreamBusy(retry_after)
             if self.requests:
-                time.sleep(max(0, self.requests[-1] + self.interval - now))
+                delay = max(0, self.requests[-1] + self.interval - now)
+                if delay > 0:
+                    logger.debug(
+                        "upstream_pacing",
+                        extra={
+                            "fields": {"budget": self.budget, "wait_ms": round(delay * 1000, 1)}
+                        },
+                    )
+                time.sleep(delay)
             self.requests.append(time.monotonic())
 
     def defer(self, retry_after: str | None) -> int:

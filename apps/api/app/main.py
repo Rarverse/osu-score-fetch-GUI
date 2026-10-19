@@ -12,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.config import Settings
-from app.logging_setup import configure_logging, request_id
+from app.logging_setup import configure_logging, request_id, safe_error_fields
 from app.routers.images import IMAGE_TTL, warm_images
 from app.routers.images import router as images_router
 from app.routers.players import router
@@ -34,6 +34,13 @@ async def lifespan(app: FastAPI):
                 "rate_limit_window": app.state.settings.rate_limit_window,
                 "rate_limit_per_ip": app.state.settings.rate_limit_per_ip,
                 "rate_limit_per_player": app.state.settings.rate_limit_per_player,
+                "cache_ttl": app.state.settings.cache_timeout,
+                "negative_cache_ttl": app.state.settings.negative_cache_ttl,
+                "log_format": app.state.settings.log_format,
+                "log_level": app.state.settings.log_level,
+                "site_credentials_configured": bool(
+                    app.state.settings.osu_client_id and app.state.settings.osu_client_secret
+                ),
             }
         },
     )
@@ -48,8 +55,8 @@ async def lifespan(app: FastAPI):
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
-    configure_logging()
     settings = settings or Settings()
+    configure_logging(settings.log_format, settings.log_level)
     app = FastAPI(title="Rarsu查分器 API", version="1.0.0", lifespan=lifespan)
     app.state.settings = settings
     app.state.cache = JsonCache(
@@ -84,14 +91,22 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         identifier = uuid.uuid4().hex
         token = request_id.set(identifier)
         started = time.perf_counter()
+        credentials = (
+            "custom"
+            if "x-osu-client-id" in request.headers or "x-osu-client-secret" in request.headers
+            else "site"
+        )
+        if request.url.path != "/health":
+            logger.info(
+                "request_started",
+                extra={"fields": {"method": request.method, "credentials": credentials}},
+            )
         try:
             try:
                 response = await call_next(request)
             except Exception as error:
                 request.state.error_code = "INTERNAL_ERROR"
-                logger.error(
-                    "request_failed", extra={"fields": {"error_type": type(error).__name__}}
-                )
+                logger.error("request_failed", extra={"fields": safe_error_fields(error)})
                 response = JSONResponse(
                     status_code=500,
                     content={"error": {"code": "INTERNAL_ERROR", "message": "服务暂时不可用。"}},
@@ -105,14 +120,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     "route": getattr(route, "path", "unmatched"),
                     "status": response.status_code,
                     "duration_ms": round((time.perf_counter() - started) * 1000, 1),
-                    "credentials": "custom"
-                    if (
-                        "x-osu-client-id" in request.headers
-                        or "x-osu-client-secret" in request.headers
-                    )
-                    else "site",
+                    "credentials": credentials,
                 }
-                for header, field in (("X-Cache", "cache"), ("Retry-After", "retry_after")):
+                for header, field in (
+                    ("X-Cache", "cache"),
+                    ("X-Cache-TTL", "cache_ttl"),
+                    ("Retry-After", "retry_after"),
+                ):
                     if value := response.headers.get(header):
                         fields[field] = value
                 if code := getattr(request.state, "error_code", None):
@@ -129,6 +143,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.exception_handler(ServiceError)
     async def service_error(request: Request, error: ServiceError):
         request.state.error_code = error.code
+        logger.warning(
+            "request_rejected",
+            extra={
+                "fields": {
+                    "error_code": error.code,
+                    "status": error.status,
+                    **({"retry_after": error.retry_after} if error.retry_after is not None else {}),
+                }
+            },
+        )
         headers = {"Cache-Control": "no-store"}
         if error.retry_after is not None:
             headers["Retry-After"] = str(error.retry_after)

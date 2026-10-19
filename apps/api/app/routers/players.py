@@ -6,6 +6,7 @@ from fastapi import APIRouter, BackgroundTasks, Header, Query, Request, Response
 from pydantic import ValidationError
 
 from app.client_ip import client_ip
+from app.logging_setup import safe_error_fields
 from app.routers.images import enqueue_images
 from app.schemas.scores import ErrorResponse, Ruleset, ScoresResponse
 from app.services.cache import normalize_player, not_found_cache_key, score_cache_key
@@ -22,16 +23,21 @@ def _cached_scores(state, key: str) -> ScoresResponse | None:
         return None
     try:
         result = ScoresResponse.model_validate(data)
-    except ValidationError:
+    except ValidationError as error:
+        logger.warning("scores_cache_invalid", extra={"fields": safe_error_fields(error)})
         return None
-    return result if result.fetched_at.utcoffset() is not None else None
+    if result.fetched_at.utcoffset() is None:
+        logger.warning("scores_cache_invalid", extra={"fields": {"reason": "missing_timezone"}})
+        return None
+    return result
 
 
 def _remember_missing(state, key: str) -> None:
     try:
         state.not_found.set(key, {"code": "PLAYER_NOT_FOUND"})
-    except OSError:
-        logger.warning("Negative cache write failed")
+        logger.info("negative_cache_written")
+    except OSError as error:
+        logger.warning("negative_cache_write_failed", extra={"fields": safe_error_fields(error)})
 
 
 def _missing_player(cache: str, ttl: int) -> ServiceError:
@@ -62,6 +68,7 @@ def player_scores(
     settings = state.settings
     player_id: str | None = None
     resolved_mode = mode
+    logger.info("scores_query_started", extra={"fields": {"mode": mode or "auto", "limit": limit}})
     try:
         name = username.strip()
         if not name or len(name) > 32 or any(ord(char) < 32 or char in "/\\?#" for char in name):
@@ -94,18 +101,21 @@ def player_scores(
         key = score_cache_key(name, mode)
         missing_key = not_found_cache_key(name)
         result = _cached_scores(state, key)
+        logger.info("scores_cache_lookup", extra={"fields": {"cache": "HIT" if result else "MISS"}})
         cached_missing = state.not_found.get_fresh(missing_key)
         if (
             result is None
             and cached_missing is not None
             and cached_missing[0].get("code") == "PLAYER_NOT_FOUND"
         ):
+            logger.info("negative_cache_hit", extra={"fields": {"cache_ttl": cached_missing[1]}})
             raise _missing_player("HIT", cached_missing[1])
 
         cache_status = "HIT"
         if result is None:
             # ossapi uses a shared OAuth session. Serialize misses and recheck the cache.
             if not state.fetch_lock.acquire(blocking=False):
+                logger.warning("scores_fetch_busy", extra={"fields": {"retry_after": 3}})
                 raise ServiceError(503, "SERVER_BUSY", "当前查询人数较多，请稍候。", retry_after=3)
             try:
                 result = _cached_scores(state, key)
@@ -115,6 +125,9 @@ def player_scores(
                     and cached_missing is not None
                     and cached_missing[0].get("code") == "PLAYER_NOT_FOUND"
                 ):
+                    logger.info(
+                        "negative_cache_hit", extra={"fields": {"cache_ttl": cached_missing[1]}}
+                    )
                     raise _missing_player("HIT", cached_missing[1])
                 if result is None:
                     try:
@@ -134,8 +147,11 @@ def player_scores(
                     for alias in aliases:
                         try:
                             state.not_found.delete(not_found_cache_key(alias))
-                        except OSError:
-                            logger.warning("Negative cache invalidation failed")
+                        except OSError as error:
+                            logger.warning(
+                                "negative_cache_delete_failed",
+                                extra={"fields": safe_error_fields(error)},
+                            )
                     data = result.model_dump(mode="json")
                     try:
                         for alias in aliases:
@@ -143,9 +159,20 @@ def player_scores(
                             if mode is None:
                                 state.cache.set(score_cache_key(alias, result.mode), data)
                         cache_status = "MISS"
-                    except OSError:
+                        logger.info(
+                            "scores_cache_written",
+                            extra={
+                                "fields": {
+                                    "aliases": len(aliases),
+                                    "cache_ttl": settings.cache_timeout,
+                                }
+                            },
+                        )
+                    except OSError as error:
                         cache_status = "BYPASS"
-                        logger.warning("Score cache write failed")
+                        logger.warning(
+                            "scores_cache_write_failed", extra={"fields": safe_error_fields(error)}
+                        )
             finally:
                 state.fetch_lock.release()
         response.headers["X-Cache"] = cache_status
@@ -157,6 +184,19 @@ def player_scores(
         player_id = str(result.player.user_id)
         resolved_mode = result.mode
         selected = result.model_copy(update={"scores": result.scores[:limit]})
+        logger.info(
+            "scores_ready",
+            extra={
+                "fields": {
+                    "mode": result.mode,
+                    "limit": limit,
+                    "score_count": len(selected.scores),
+                    "cached_score_count": len(result.scores),
+                    "cache": cache_status,
+                    "cache_age_seconds": round(max(0, age), 1),
+                }
+            },
+        )
         background_tasks.add_task(
             enqueue_images,
             state,
@@ -174,5 +214,5 @@ def player_scores(
                 player_id=player_id,
                 visitor_id=visitor_id,
             )
-        except Exception:
-            logger.warning("Usage stats were not recorded")
+        except Exception as error:
+            logger.warning("usage_write_failed", extra={"fields": safe_error_fields(error)})

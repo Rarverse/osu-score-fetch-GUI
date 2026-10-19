@@ -29,6 +29,8 @@ const zh = {
   noLogin: "无需登录",
   publicScores: "公开成绩",
   ownApi: "使用自己的 osu! API",
+  ownApiRecommendation:
+    "推荐使用自己的 osu! API 凭据，可在下方「使用自己的 osu! API」中配置。",
   ownApiDescription:
     "默认使用站点 API。启用下方选项后，请填写 osu! OAuth 应用的 Client ID 和 Client Secret（不是旧版 API Key）；可点击「显示」核对密钥。Callback URL 可留空。",
   clientId: "Client ID",
@@ -129,6 +131,8 @@ const en: Record<MessageKey, string> = {
   noLogin: "No sign-in required",
   publicScores: "Public scores",
   ownApi: "Use my osu! API credentials",
+  ownApiRecommendation:
+    "We recommend using your own osu! API credentials. Configure them below under “Use my osu! API credentials”.",
   ownApiDescription:
     "The site API is used by default. Enable the option below to enter your osu! OAuth Client ID and Client Secret (not a legacy API key). Select Show to check your secret. The Callback URL can be blank.",
   clientId: "Client ID",

@@ -7,6 +7,7 @@ from ossapi import GameMode, Ossapi, ScoreType
 from requests.adapters import HTTPAdapter
 
 from app.config import Settings
+from app.logging_setup import safe_error_fields
 from app.schemas.scores import Player, Ruleset, Score, ScoresResponse
 from app.services.rate_limit import UpstreamBusy, UpstreamLimiter
 
@@ -27,9 +28,21 @@ class TimeoutAdapter(HTTPAdapter):
         self.limiter = limiter
 
     def send(self, request, **kwargs):
+        queued = time.perf_counter()
         self.limiter.acquire()
+        wait_ms = round((time.perf_counter() - queued) * 1000, 1)
         kwargs["timeout"] = (5, 20)
-        phase = "oauth" if request.url.split("?", 1)[0].endswith("/oauth/token") else "scores"
+        endpoint = request.url.split("?", 1)[0]
+        phase = (
+            "oauth"
+            if endpoint.endswith("/oauth/token")
+            else "scores"
+            if "/scores/" in endpoint
+            else "player"
+            if "/users/" in endpoint
+            else "api"
+        )
+        logger.debug("osu_http_started", extra={"fields": {"phase": phase, "wait_ms": wait_ms}})
         started = time.perf_counter()
         try:
             response = super().send(request, **kwargs)
@@ -39,7 +52,9 @@ class TimeoutAdapter(HTTPAdapter):
                 extra={
                     "fields": {
                         "phase": phase,
-                        "error_type": type(error).__name__,
+                        "duration_ms": round((time.perf_counter() - started) * 1000, 1),
+                        "wait_ms": wait_ms,
+                        **safe_error_fields(error),
                     }
                 },
             )
@@ -52,6 +67,7 @@ class TimeoutAdapter(HTTPAdapter):
                     "phase": phase,
                     "status": response.status_code,
                     "duration_ms": round((time.perf_counter() - started) * 1000, 1),
+                    "wait_ms": wait_ms,
                 }
             },
         )
@@ -100,6 +116,10 @@ class OsuClient:
     ) -> Ossapi:
         custom_credentials = client_id is not None or client_secret is not None
         if not custom_credentials and self.client and time.monotonic() < self.expires_at:
+            logger.info(
+                "oauth_token_reused",
+                extra={"fields": {"expires_in_seconds": int(self.expires_at - time.monotonic())}},
+            )
             return self.client
         configured_secret = self.settings.osu_client_secret
         resolved_client_id = client_id or self.settings.osu_client_id
@@ -108,6 +128,10 @@ class OsuClient:
         )
         if not resolved_client_id or not resolved_secret:
             raise ServiceError(503, "NOT_CONFIGURED", "服务端尚未配置 osu! OAuth 凭据。")
+        logger.info(
+            "oauth_token_requested",
+            extra={"fields": {"credentials": "custom" if custom_credentials else "site"}},
+        )
         # Manage the client credentials token in memory, with a bounded OAuth request.
         # Supplying access_token prevents ossapi from persisting credentials via pickle.
         with requests.Session() as session:
@@ -129,6 +153,16 @@ class OsuClient:
             access_token=token["access_token"],
         )
         client.session.mount("https://", TimeoutAdapter(self.limiter))
+        logger.info(
+            "oauth_token_ready",
+            extra={
+                "fields": {
+                    "credentials": "custom" if custom_credentials else "site",
+                    "expires_in_seconds": token["expires_in"],
+                    "reusable": not custom_credentials,
+                }
+            },
+        )
         if custom_credentials:
             # User-supplied secrets and tokens are used for this lookup only.
             return client
@@ -144,6 +178,7 @@ class OsuClient:
         client_secret: str | None = None,
     ) -> ScoresResponse:
         api = None
+        started = time.perf_counter()
         try:
             # Check headroom for the whole lookup while the route holds the fetch lock.
             has_cached_token = (
@@ -153,6 +188,10 @@ class OsuClient:
                 and time.monotonic() < self.expires_at
             )
             needed = 2 if has_cached_token else 3
+            logger.info(
+                "osu_query_started",
+                extra={"fields": {"mode": mode or "auto", "required_requests": needed}},
+            )
             self.limiter.ensure_capacity(needed)
             api = (
                 self.get_ossapi_client()
@@ -168,11 +207,12 @@ class OsuClient:
                     ) from None
                 raise
             mode = GameMode(mode or user.playmode).value
+            logger.info("osu_mode_resolved", extra={"fields": {"mode": mode}})
             scores = api.user_scores(
                 user.id, ScoreType.BEST, mode=GameMode(mode), limit=50, include_fails=False
             )
             stats = user.statistics
-            return ScoresResponse(
+            result = ScoresResponse(
                 mode=mode,
                 player=Player(
                     user_id=user.id,
@@ -186,6 +226,17 @@ class OsuClient:
                 scores=structure_scores(scores),
                 fetched_at=datetime.now(UTC),
             )
+            logger.info(
+                "osu_query_completed",
+                extra={
+                    "fields": {
+                        "mode": mode,
+                        "score_count": len(result.scores),
+                        "duration_ms": round((time.perf_counter() - started) * 1000, 1),
+                    }
+                },
+            )
+            return result
         except UpstreamBusy as error:
             raise ServiceError(
                 503, "UPSTREAM_BUSY", "查询服务正在等待 osu! 请求额度。", error.retry_after
@@ -209,13 +260,14 @@ class OsuClient:
                 self.client = None
                 self.expires_at = 0.0
                 api.session.close()
+                logger.warning("oauth_token_invalidated")
             raise ServiceError(
                 502, "UPSTREAM_ERROR", "osu! 服务暂时无法访问，请稍后重试。"
             ) from None
         except ServiceError:
             raise
         except Exception as error:
-            logger.error("osu_query_failed", extra={"fields": {"error_type": type(error).__name__}})
+            logger.error("osu_query_failed", extra={"fields": safe_error_fields(error)})
             # Keep tokens, raw upstream bodies and exception details out of responses/logs.
             raise ServiceError(
                 502, "UPSTREAM_ERROR", "osu! 服务暂时无法访问，请稍后重试。"

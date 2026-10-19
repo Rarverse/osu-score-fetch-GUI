@@ -127,6 +127,8 @@ npm run dev
 | 变量 | 默认值 | 用途 |
 | --- | --- | --- |
 | `OSU_CLIENT_ID` / `OSU_CLIENT_SECRET` | 无 | 可选的服务端 OAuth 凭据，须成对配置 |
+| `LOG_FORMAT` | `text` | 英文易读日志；设为 `json` 可接入日志采集工具 |
+| `LOG_LEVEL` | `INFO` | `DEBUG`、`INFO`、`WARNING` 或 `ERROR`；`DEBUG` 增加请求发起、限速间隔和图片队列细节 |
 | `CACHE_TIMEOUT` | `60` | 查询结果复用窗口，单位秒，最小为 60 |
 | `CACHE_RETENTION` | `15552000` | 缓存文件保留期，默认 180 天，不得短于复用窗口 |
 | `CACHE_PATH` | `apps/api/.cache` | 本地默认缓存目录 |
@@ -233,21 +235,48 @@ docker compose logs --since=10m api web
 
 使用 Portainer 时，进入 **Containers → API 容器 → Logs**，打开自动刷新。镜像部署在 `deploy` 目录运行同样的命令，或加上 `-f deploy/compose.yaml --env-file deploy/.env.deploy`。
 
-API 每行输出一条 JSON，含 UTC 时间、级别和事件名。`request_completed` 记录请求编号 `request_id`、路由模板、HTTP 状态、耗时、缓存状态、凭据来源（`site` / `custom`）、错误码与等待秒数。响应头 `X-Request-ID` 可在浏览器开发者工具 **Network → 请求 → Headers** 中找到，用它在日志里关联同一次查询。健康检查成功时不写请求日志。
+API 默认每行输出一条**英文易读日志**：UTC 时间、级别、模块、请求编号、事件说明和可搜索的 `key=value` 字段。失败时补充英文 `error_reason` 和 `next_step`，说明原因与处理建议。例如（编号和耗时仅为示例）：
+
+```text
+2026-10-19T10:00:00.000+00:00 INFO    [app.routers.players] request_id=abc123 Scores ready to return to the browser | event=scores_ready mode=mania limit=20 score_count=20 cached_score_count=50 cache=HIT cache_age_seconds=12.3
+2026-10-19T10:00:01.000+00:00 WARNING [app.main] request_id=def456 Request completed with an error | event=request_completed status=503 error_code=SERVER_BUSY retry_after=3 error_reason="Another score lookup is already running" next_step="Wait retry_after seconds; the browser retries automatically"
+```
+
+`request_started` 到 `request_completed` 之间的同一次查询使用相同的 `request_id`。响应头 `X-Request-ID` 可在浏览器开发者工具 **Network → 请求 → Headers** 中找到。`duration_ms` 是阶段耗时，`wait_ms` 是等待限速或排队的耗时，单位均为毫秒；`retry_after`、`cache_ttl` 和 `cache_age_seconds` 的单位是秒。健康检查成功时不写请求日志。
+
+需要查看更细的限速间隔、上游请求开始、图片缓存命中和后台队列时，在 API 使用的环境文件中设置：
+
+```dotenv
+LOG_FORMAT=text
+LOG_LEVEL=DEBUG
+```
+
+需要保留原来的结构化输出时，设置 `LOG_FORMAT=json`；JSON 同样包含英文 `message`、错误原因和处理建议。修改配置后执行 `docker compose up -d --build api`，日志级别也可设为 `WARNING` 或 `ERROR` 来减少输出。`LOG_LEVEL` 只控制本应用日志，不开启可能包含原始 URL 的第三方库调试日志。
 
 遇到等待或失败时，关注以下字段：
 
 | 事件 / 字段 | 含义 |
 | --- | --- |
+| `scores_query_started` / `mode`、`limit` | 查询开始；`auto` 表示读取玩家首选模式 |
+| `scores_cache_lookup` / `cache` | `HIT` 复用缓存，`MISS` 需要进一步检查不存在缓存或请求上游 |
+| `negative_cache_hit` / `cache_ttl` | 最近已确认玩家不存在，直接复用 404 |
+| `scores_ready` / `score_count`、`cached_score_count` | 实际返回条数与完整缓存条数，附带解析后的模式和缓存年龄 |
+| `oauth_token_requested` / `oauth_token_reused` | 区分重新获取 OAuth token 和复用站点 token |
+| `oauth_token_invalidated` | 站点 token 被上游拒绝；下次查询会重新获取 |
 | `local_rate_limited` / `scope` | 站点 IP 或玩家限流，`retry_after` 是剩余秒数 |
 | `upstream_wait` / `reason=budget_exhausted` | 本服务的上游请求预算已耗尽 |
 | `upstream_wait` / `reason=upstream_cooldown` | 正在遵守上游 429 冷却 |
 | `upstream_rate_limited` / `budget` | osu! API 或图片返回 429，`api` 与 `images` 分别计数 |
 | `upstream_rate_limited` / `fallback=true` | 上游未给出有效 `Retry-After`，保守等待 60 秒 |
-| `osu_http_completed` / `phase`、`status` | OAuth / 查分上游 HTTP 状态，例如 OAuth 401 表示凭据被拒绝 |
-| `request_failed` / `error_type` | 未预期的服务异常类型 |
+| `osu_http_completed` / `phase`、`status` | `oauth`、`player`、`scores` 分别表示认证、玩家资料和成绩阶段；例如 OAuth 401 表示凭据被拒绝 |
+| `image_http_completed` / `bytes`、`media_type` | 图片下载大小、类型和耗时 |
+| `image_fetch_wait` / `image_queue_timeout` | 图片等待请求额度，或排队超过 75 秒 |
+| `images_enqueued` / `added`、`skipped`、`dropped` | 后台图片队列新增、跳过、因队列已满而丢弃的数量 |
+| `cache_entry_invalid` / `cache_read_failed` | 缓存文件损坏或不可读，作为未命中继续查询 |
+| `scores_cache_write_failed` / `image_cache_write_failed` / `usage_write_failed` | 缓存或统计写入失败；当前查询仍尽量返回已获取的数据 |
+| `request_failed` / `error_type`、`error_trace`、`error_errno` | 异常类型、应用内相对文件／行号／函数，以及适用时的系统错误编号 |
 
-日志不记录用户名、玩家 ID、IP、访客标识、Client ID、密钥、token、原始 URL、查询参数或上游响应正文。Nginx 与 Uvicorn 的原始访问日志继续关闭，避免将查询路径中的玩家信息写入日志。Compose 对每个容器启用日志轮转，最多保留 3 个、每个 10 MB 的日志文件；重建容器后旧日志不保证保留。
+两种格式均不记录用户名、玩家 ID、IP、访客标识、Client ID、密钥、token、原始 URL、查询参数或上游响应正文。异常仅记录类型和安全的代码位置，不输出原始异常文字、源码行或局部变量。后台图片预缓存独立运行，其日志可能没有用户请求编号；预缓存失败不会影响成绩查询。Nginx 与 Uvicorn 的原始访问日志继续关闭，避免将查询路径中的玩家信息写入日志。Compose 对每个容器启用日志轮转，最多保留 3 个、每个 10 MB 的日志文件；重建容器后旧日志不保证保留。
 
 ## 项目结构与检查
 

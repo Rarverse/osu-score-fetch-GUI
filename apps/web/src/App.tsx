@@ -126,6 +126,7 @@ function ScoreRow({ score, position }: { score: Score; position: number }) {
 
 export default function App() {
   const [username, setUsername] = useState("");
+  const [apiExpanded, setApiExpanded] = useState(false);
   const [useOwnApi, setUseOwnApi] = useState(false);
   const [apiClientId, setApiClientId] = useState("");
   const [apiClientSecret, setApiClientSecret] = useState("");
@@ -335,6 +336,7 @@ export default function App() {
               <Markdown>{customIntro}</Markdown>
             </div>
           )}
+          <p className="api-recommendation">{t("ownApiRecommendation")}</p>
           <form className="search-panel" onSubmit={search}>
             <div className="search-input-wrap">
               <Search size={21} aria-hidden="true" />
@@ -412,79 +414,104 @@ export default function App() {
               </select>
             </div>
           </form>
-          <details
-            className="api-credentials"
-            onToggle={(event) => {
-              if (!event.currentTarget.open) setShowApiSecret(false);
-            }}
-          >
-            <summary>
+          <div className="api-credentials">
+            <button
+              type="button"
+              className="api-credentials-trigger"
+              aria-expanded={apiExpanded}
+              aria-controls="api-credentials-panel"
+              onClick={() => {
+                setApiExpanded((expanded) => !expanded);
+                setShowApiSecret(false);
+              }}
+            >
               <ChevronRight size={16} aria-hidden="true" />
               {t("ownApi")}
-            </summary>
-            <div className="api-credentials-content">
-              <p>{t("ownApiDescription")}</p>
-              <label className="api-credentials-toggle">
-                <input
-                  type="checkbox"
-                  checked={useOwnApi}
-                  onChange={(event) => {
-                    setUseOwnApi(event.target.checked);
-                    setShowApiSecret(false);
-                  }}
-                  disabled={!secureContext || loading || exporting}
-                />
-                {t("ownApi")}
-              </label>
-              <label>
-                {t("clientId")}
-                <input
-                  inputMode="numeric"
-                  autoComplete="off"
-                  value={apiClientId}
-                  onChange={(event) => setApiClientId(event.target.value)}
-                  disabled={!useOwnApi || loading || exporting}
-                />
-              </label>
-              <div className="secret-field">
-                <label htmlFor="api-client-secret">{t("clientSecret")}</label>
-                <div className="secret-input">
-                  <input
-                    id="api-client-secret"
-                    type={showApiSecret ? "text" : "password"}
-                    autoComplete="new-password"
-                    autoCapitalize="none"
-                    spellCheck={false}
-                    value={apiClientSecret}
-                    onChange={(event) => setApiClientSecret(event.target.value)}
-                    disabled={!useOwnApi || loading || exporting}
-                  />
-                  <button
-                    type="button"
-                    aria-controls="api-client-secret"
-                    aria-label={t(showApiSecret ? "hideSecret" : "showSecret")}
-                    onClick={() => setShowApiSecret((visible) => !visible)}
-                    disabled={!useOwnApi}
+            </button>
+            <div
+              id="api-credentials-panel"
+              className="api-credentials-panel"
+              aria-hidden={!apiExpanded}
+              inert={!apiExpanded}
+            >
+              <div className="api-credentials-body">
+                <div className="api-credentials-content">
+                  <p>{t("ownApiDescription")}</p>
+                  <label className="api-credentials-toggle">
+                    <input
+                      type="checkbox"
+                      checked={useOwnApi}
+                      onChange={(event) => {
+                        setUseOwnApi(event.target.checked);
+                        setShowApiSecret(false);
+                      }}
+                      disabled={!secureContext || loading || exporting}
+                    />
+                    {t("ownApi")}
+                  </label>
+                  <label>
+                    {t("clientId")}
+                    <input
+                      inputMode="numeric"
+                      autoComplete="off"
+                      value={apiClientId}
+                      onChange={(event) => setApiClientId(event.target.value)}
+                      disabled={!useOwnApi || loading || exporting}
+                    />
+                  </label>
+                  <div className="secret-field">
+                    <label htmlFor="api-client-secret">
+                      {t("clientSecret")}
+                    </label>
+                    <div className="secret-input">
+                      <input
+                        id="api-client-secret"
+                        type={showApiSecret ? "text" : "password"}
+                        autoComplete="new-password"
+                        autoCapitalize="none"
+                        spellCheck={false}
+                        value={apiClientSecret}
+                        onChange={(event) =>
+                          setApiClientSecret(event.target.value)
+                        }
+                        disabled={!useOwnApi || loading || exporting}
+                      />
+                      <button
+                        type="button"
+                        aria-controls="api-client-secret"
+                        aria-label={t(
+                          showApiSecret ? "hideSecret" : "showSecret",
+                        )}
+                        onClick={() => setShowApiSecret((visible) => !visible)}
+                        disabled={!useOwnApi}
+                      >
+                        {showApiSecret ? (
+                          <EyeOff size={17} />
+                        ) : (
+                          <Eye size={17} />
+                        )}
+                        {t(showApiSecret ? "hide" : "show")}
+                      </button>
+                    </div>
+                  </div>
+                  <p className="api-credentials-note">
+                    {t("credentialsInMemory")}
+                  </p>
+                  {!secureContext && (
+                    <p className="api-credentials-note">{t("httpsRequired")}</p>
+                  )}
+                  <a
+                    href="https://osu.ppy.sh/home/account/edit"
+                    target="_blank"
+                    rel="noreferrer"
                   >
-                    {showApiSecret ? <EyeOff size={17} /> : <Eye size={17} />}
-                    {t(showApiSecret ? "hide" : "show")}
-                  </button>
+                    {t("createOauth")}
+                    <ExternalLink size={12} />
+                  </a>
                 </div>
               </div>
-              <p className="api-credentials-note">{t("credentialsInMemory")}</p>
-              {!secureContext && (
-                <p className="api-credentials-note">{t("httpsRequired")}</p>
-              )}
-              <a
-                href="https://osu.ppy.sh/home/account/edit"
-                target="_blank"
-                rel="noreferrer"
-              >
-                {t("createOauth")}
-                <ExternalLink size={12} />
-              </a>
             </div>
-          </details>
+          </div>
           <div className="search-note">
             <Check size={13} />
             {t("noLogin")}
@@ -610,7 +637,12 @@ export default function App() {
               </button>
             </div>
             {(exporting || downloadReady) && (
-              <div className="download-status" role="status" aria-live="polite">
+              <div
+                key={exporting ? "exporting" : "ready"}
+                className="download-status"
+                role="status"
+                aria-live="polite"
+              >
                 {exporting ? (
                   <LoaderCircle size={20} className="spin" />
                 ) : (

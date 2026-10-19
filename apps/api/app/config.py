@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Literal
 
 from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -11,6 +12,8 @@ class Settings(BaseSettings):
 
     osu_client_id: int | None = None
     osu_client_secret: SecretStr | None = None
+    log_format: Literal["text", "json"] = "text"
+    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
     cache_timeout: int = Field(default=60, ge=60)
     cache_retention: int = Field(default=15552000, ge=60)
     cache_path: Path = API_ROOT / ".cache"

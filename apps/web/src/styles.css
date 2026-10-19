@@ -71,8 +71,7 @@ button:disabled {
 }
 a:focus-visible,
 button:focus-visible,
-select:focus-visible,
-summary:focus-visible {
+select:focus-visible {
   outline: 2px solid #c9b2ff;
   outline-offset: 5px;
 }
@@ -339,26 +338,47 @@ main {
   color: #a5a3af;
   font-size: 12px;
 }
-.api-credentials summary {
+.api-recommendation {
+  margin-top: 16px;
+  color: #c9b2ff;
+  font-size: 12px;
+  line-height: 1.7;
+  text-align: center;
+}
+.api-credentials-trigger {
   display: flex;
   align-items: center;
   gap: 8px;
   min-height: 44px;
-  list-style: none;
-  cursor: pointer;
+  padding: 0;
+  border: 0;
+  background: transparent;
   color: #c9b2ff;
 }
-.api-credentials summary::-webkit-details-marker {
-  display: none;
-}
-.api-credentials summary > svg {
+.api-credentials-trigger > svg {
   transition: transform 220ms ease;
 }
-.api-credentials[open] summary > svg {
+.api-credentials-trigger[aria-expanded="true"] > svg {
   transform: rotate(90deg);
 }
-.api-credentials[open] .api-credentials-content {
-  animation: panel-appear 240ms ease-out both;
+.api-credentials-panel {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    grid-template-rows 240ms ease,
+    opacity 240ms ease,
+    visibility 240ms;
+}
+.api-credentials-trigger[aria-expanded="true"] + .api-credentials-panel {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  visibility: visible;
+}
+.api-credentials-body {
+  min-height: 0;
+  overflow: hidden;
 }
 .api-credentials-content {
   display: grid;
@@ -1092,8 +1112,13 @@ footer a:hover {
     font-size: 12px;
   }
 }
-.results {
-  animation: panel-appear 320ms ease-out both;
+.start-panel,
+.loading-panel,
+.waiting-panel,
+.error-panel,
+.results,
+.download-status {
+  animation: panel-appear 240ms ease-out backwards;
 }
 @keyframes panel-appear {
   from {
@@ -1112,11 +1137,16 @@ footer a:hover {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .api-credentials[open] .api-credentials-content,
-  .results {
+  .start-panel,
+  .loading-panel,
+  .waiting-panel,
+  .error-panel,
+  .results,
+  .download-status {
     animation: none;
   }
-  .api-credentials summary > svg {
+  .api-credentials-trigger > svg,
+  .api-credentials-panel {
     transition: none;
   }
   .spin {
