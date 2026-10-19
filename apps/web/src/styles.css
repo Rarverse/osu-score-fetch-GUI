@@ -1133,6 +1133,13 @@ footer a:hover {
     transform: translateY(0);
   }
 }
+@media (min-width: 900px) {
+  .hero-description {
+    font-size: 17px;
+    white-space: nowrap;
+    letter-spacing: 0;
+  }
+}
 @media (prefers-reduced-motion: reduce) {
   .start-panel,
   .loading-panel,
