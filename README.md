@@ -2,7 +2,7 @@
 
 输入 osu! 玩家用户名或 ID，查看四种模式的 Top 20 / Top 50 最佳成绩，并下载 B50 图片。项目属于 rarverse，是非官方 fan-made 网页工具，与 peppy / osu! 无隶属关系。
 
-前端使用 React、TypeScript 和 Vite，后端使用 FastAPI 与 ossapi；生产环境由 Caddy 托管静态文件并转发 API 请求，支持 Docker Compose 部署。
+前端使用 React、TypeScript 和 Vite，后端使用 FastAPI 与 ossapi；生产环境由 Nginx 托管静态文件并转发 API 请求，支持 Docker Compose 部署。
 
 [快速部署](#快速部署) · [本地开发](#本地开发) · [环境配置](#环境配置) · [API](#api) · [部署详情](deploy/README.md) · [持续开发建议](DEVELOPMENT.md)
 
@@ -48,7 +48,7 @@ docker compose up -d --build
 
 访问链路：`访客 → 外部 HTTPS 反代 → web（HTTP）→ API`。
 
-外部 Nginx、Caddy 或雷池负责域名、HTTPS 和证书。同机反代的上游填写 **`http://127.0.0.1:8080`**，转发整个站点并保留路径。项目内部仅提供 HTTP，不申请或挂载证书，不占用宿主机 80/443；API 的 8000 端口仅在 Docker 网络内可用。
+外部 Nginx 或雷池负责域名、HTTPS 和证书。同机反代的上游填写 **`http://127.0.0.1:8080`**，转发整个站点并保留路径。项目内部仅提供 HTTP，不申请或挂载证书，不占用宿主机 80/443；API 的 8000 端口仅在 Docker 网络内可用。
 
 反代在独立 bridge 网络容器中时，容器内的 `127.0.0.1` 指向反代自身。请按[部署说明](deploy/README.md#反代在独立-bridge-网络容器)接入项目网络，使用 `http://web:80` 并配置可信代理 IP。
 
@@ -218,11 +218,11 @@ GET /api/v1/players/{username}/scores?type=best&limit=20&mode=mania
 apps/web/          React 页面、国际化、B50 导出和前端 API 测试
 apps/api/          FastAPI、osu! 客户端、缓存、限流和后端测试
 compose.yaml       从源码构建的默认部署入口
-deploy/            Caddy 配置、GHCR 部署、更新脚本与部署文档
+deploy/            Nginx 配置、GHCR 部署、更新脚本与部署文档
 DEVELOPMENT.md     后续开发与运行维护建议
 ```
 
-首页说明可在 `apps/web/src/content/intro.md` 和 `intro.en.md` 修改，界面译文位于 `apps/web/src/i18n.ts`。开发环境自动更新，生产环境需要重新构建。前端构建产物位于 `apps/web/dist`，生产部署由 Caddy 提供服务。
+首页说明可在 `apps/web/src/content/intro.md` 和 `intro.en.md` 修改，界面译文位于 `apps/web/src/i18n.ts`。开发环境自动更新，生产环境需要重新构建。前端构建产物位于 `apps/web/dist`，生产部署由 Nginx 提供服务。
 
 在仓库根目录检查前端：
 

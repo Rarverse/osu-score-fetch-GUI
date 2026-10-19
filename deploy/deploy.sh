@@ -8,7 +8,7 @@ service=$5
 cd "$dir"
 stage=".incoming-$sha"
 backup=$(mktemp -d .rollback.XXXXXX)
-for file in compose.yaml Caddyfile .env.deploy; do
+for file in compose.yaml nginx.conf .env.deploy; do
   if [ -f "$file" ]; then cp -p "$file" "$backup/$file"; fi
 done
 rollback() {
@@ -18,7 +18,7 @@ rollback() {
     echo "No complete previous deployment exists; keeping failed deployment files for recovery"
   elif [ "$status" -ne 0 ]; then
     echo "Deployment failed; restoring previous configuration and image tag"
-    for file in compose.yaml Caddyfile .env.deploy; do
+    for file in compose.yaml nginx.conf .env.deploy; do
       if [ -f "$backup/$file" ]; then
         cp -p "$backup/$file" "$file"
       else
@@ -38,7 +38,7 @@ rollback() {
 }
 trap rollback EXIT
 cp "$stage/compose.yaml" compose.yaml
-cp "$stage/Caddyfile" Caddyfile
+cp "$stage/nginx.conf" nginx.conf
 # Preserve all deployment variables, replacing only the image tag.
 touch .env.deploy
 grep -v -E '^IMAGE_TAG=' .env.deploy > "$stage/env" || true

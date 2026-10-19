@@ -15,11 +15,13 @@ ENV VITE_SITE_URL=${VITE_SITE_URL}
 
 RUN npm run build --workspace apps/web
 
-# caddy:2.10.2, multi-arch index digest
-FROM caddy:2.10.2@sha256:c3d7ee5d2b11f9dc54f947f68a734c84e9c9666c92c88a7f30b9cba5da182adb
+# nginx:1.30.6-alpine, multi-arch index digest
+FROM nginx:1.30.6-alpine@sha256:970364228b1e4f932abc22d321932816782cca8a20b85a77552a7cfe9acfb3b5
 
-COPY deploy/Caddyfile /etc/caddy/Caddyfile
-COPY --from=build /src/apps/web/dist /srv
+COPY deploy/nginx.conf /etc/nginx/conf.d/default.conf
+COPY deploy/15-trusted-proxies.sh /docker-entrypoint.d/15-trusted-proxies.sh
+RUN chmod 755 /docker-entrypoint.d/15-trusted-proxies.sh
+COPY --from=build /src/apps/web/dist /usr/share/nginx/html
 
 # Check both the static site and the API through the same HTTP entry point.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \

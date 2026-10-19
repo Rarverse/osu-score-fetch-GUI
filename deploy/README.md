@@ -1,12 +1,12 @@
 # Debian / Docker Compose 部署
 
-默认从源码构建，在仓库根目录执行 `docker compose up -d`。项目只提供 HTTP，域名、HTTPS 和证书全部由外部 Nginx、Caddy、雷池等反代管理。
+默认从源码构建，在仓库根目录执行 `docker compose up -d`。项目只提供 HTTP，域名、HTTPS 和证书全部由外部 Nginx、雷池等反代管理。
 
 组织方式参考 [Outline 官方 Docker 部署](https://docs.getoutline.com/s/hosting/doc/docker-7pfeLP5a8t)：Compose 管理服务，环境文件管理配置，命名卷保存数据；本项目使用外部反代终止 TLS。
 
 ## 1. 从源码启动（推荐）
 
-Debian 需要安装 Docker Engine 和 Compose 插件，Compose 版本至少为 **2.24.0**（使用可选 `env_file`）。安装步骤见 [Docker 官方 Debian 文档](https://docs.docker.com/engine/install/debian/)。不需要在宿主机安装 Node、Python、uv 或 Caddy。
+Debian 需要安装 Docker Engine 和 Compose 插件，Compose 版本至少为 **2.24.0**（使用可选 `env_file`）。安装步骤见 [Docker 官方 Debian 文档](https://docs.docker.com/engine/install/debian/)。不需要在宿主机安装 Node、Python、uv 或 Nginx。
 
 进入已经克隆的仓库根目录：
 
@@ -46,7 +46,7 @@ docker compose up -d
 访问链路：访客 → 外部 HTTPS 反代 → HTTP web → API。
 
 - web 只发布 `127.0.0.1:8080`（或配置的端口），API 的 8000 不发布到宿主机。
-- 项目内 Caddy 仅托管静态文件、转发 `/api/*` 和 `/health`，显式关闭自动 HTTPS。
+- 项目内 Nginx 仅托管静态文件、转发 `/api/*` 和 `/health`，只监听 HTTP。
 - 项目不申请、读取或挂载证书，不发布宿主机 80/443，不做 HTTPS 跳转。
 - 外部反代转发整个站点，保留路径、`Host`、`X-Forwarded-For` 和 `X-Forwarded-Proto`。
 
@@ -54,17 +54,9 @@ docker compose up -d
 
 上游填写 **`http://127.0.0.1:8080`**，协议选 HTTP，不附加 `/api`。
 
-外部 Caddy 示例，域名与证书均在这层管理：
+外部 Nginx 示例见 [nginx.conf.example](nginx.conf.example)，证书路径指向你自己管理的位置。雷池中配置相同 HTTP 上游，证书绑定在雷池站点上。
 
-```caddy
-scores.example.com {
-    reverse_proxy 127.0.0.1:8080
-}
-```
-
-Nginx 示例见 [nginx.conf.example](nginx.conf.example)，证书路径指向你自己管理的位置。雷池中配置相同 HTTP 上游，证书绑定在雷池站点上。
-
-Caddy 信任 Docker 网关并从 `X-Forwarded-For` 右侧解析真实 IP，再向 API 发送单个客户端 IP。不要把 `TRUSTED_PROXIES` 或 API 的信任范围放开为整个公网。
+项目内 Nginx 信任 Docker 网关并从 `X-Forwarded-For` 右侧解析真实 IP，再向 API 发送单个客户端 IP。不要把 `TRUSTED_PROXIES` 或 API 的信任范围放开为整个公网。
 
 ### 反代在独立 bridge 网络容器
 
@@ -112,7 +104,7 @@ git pull
 docker compose up -d --build
 ```
 
-仅改运行时配置时执行 `docker compose up -d`；改 `VITE_SITE_URL`、前端源码或 `deploy/Caddyfile` 时需要 `--build`。Caddyfile 打包在 web 镜像中，不挂载宿主机副本。
+修改 `deploy/15-trusted-proxies.sh` 同样需要重新构建 web。仅改运行时配置时执行 `docker compose up -d`；改 `VITE_SITE_URL`、前端源码或 `deploy/nginx.conf` 时需要 `--build`。Nginx 配置和可信代理启动脚本打包在 web 镜像中，不挂载宿主机副本。
 
 ## 4. 已有部署与 GHCR 流水线
 

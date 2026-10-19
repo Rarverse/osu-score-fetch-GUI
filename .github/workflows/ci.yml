@@ -169,6 +169,7 @@ jobs:
           set -euo pipefail
           docker compose config --quiet
           docker compose up -d --no-build --wait --wait-timeout 120
+          docker compose exec -T web nginx -t
           python3 - <<'PY'
           import json
           import re
@@ -184,6 +185,7 @@ jobs:
           with client.open(origin + "/", timeout=5) as response:
               assert response.status == 200
               assert response.headers.get_content_type() == "text/html"
+              assert response.headers["Cache-Control"] == "no-cache"
               html = response.read().decode()
           assets = re.findall(r'(?:src|href)="(/assets/[^"?]+)"', html)
           assert assets, "Built frontend assets missing"
@@ -191,6 +193,13 @@ jobs:
               with client.open(origin + path, timeout=5) as response:
                   assert response.status == 200
                   assert response.headers.get_content_type() != "text/html"
+                  assert response.headers["Cache-Control"] == "public, max-age=31536000, immutable"
+          with client.open(origin + "/og.png", timeout=5) as response:
+              assert response.headers.get_content_type() == "image/png"
+              assert response.headers["Cache-Control"] == "public, max-age=86400"
+          with client.open(origin + "/some/page", timeout=5) as response:
+              assert response.read().decode() == html
+              assert response.headers["Cache-Control"] == "no-cache"
           with client.open(origin + "/health", timeout=5) as response:
               assert json.load(response)["status"] == "ok"
           try:
@@ -200,7 +209,27 @@ jobs:
               assert json.load(error)["error"]["code"] == "NOT_CONFIGURED"
           else:
               raise AssertionError("Expected unconfigured API error")
+          for path, status in [
+              ("/api/missing.png", 404),
+              ("/api/v1/players/1/scores?mode=invalid", 422),
+              ("/assets/missing.js", 404),
+          ]:
+              try:
+                  client.open(origin + path, timeout=5)
+              except HTTPError as error:
+                  assert error.code == status
+                  if path.startswith("/api/"):
+                      assert error.headers.get_content_type() == "application/json"
+              else:
+                  raise AssertionError(f"Expected {status} for {path}")
           PY
+          # The API can get a new IP while web stays up; Nginx must re-resolve it.
+          docker compose up -d --no-build --no-deps --force-recreate --wait --wait-timeout 120 api
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8080/health; then break; fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:8080/health
           docker compose exec -T --user osu api python -c \
             'from pathlib import Path; Path("/var/lib/osu-score-api/cache/deploy-probe").write_text("persisted")'
           docker compose up -d --no-build --force-recreate --wait --wait-timeout 120
@@ -234,7 +263,7 @@ jobs:
       API_CONTEXT: ${{ vars.API_BUILD_CONTEXT || 'apps/api' }}
       WEB_CONTEXT: ${{ vars.WEB_BUILD_CONTEXT || '.' }}
       COMPOSE_FILE: ${{ vars.COMPOSE_FILE || 'deploy/compose.yaml' }}
-      CADDYFILE: ${{ vars.CADDYFILE || 'deploy/Caddyfile' }}
+      NGINX_CONF: ${{ vars.NGINX_CONF || 'deploy/nginx.conf' }}
       DEPLOY_DIR: ${{ vars.DEPLOY_DIR || '/opt/osu-score-api' }}
       # deploy/compose.yaml does not publish api port 8000. Probe inside that service.
       # vars.DEPLOY_HEALTH_URL, vars.DEPLOY_HEALTH_MODE, and vars.DEPLOY_API_SERVICE still override.
@@ -312,7 +341,7 @@ jobs:
         run: |
           set -euo pipefail
           present=true
-          for path in "$COMPOSE_FILE" "$CADDYFILE"; do
+          for path in "$COMPOSE_FILE" "$NGINX_CONF"; do
             if [ ! -f "$path" ]; then
               echo "Missing ${path}; skipping remote deploy."
               present=false
@@ -397,5 +426,5 @@ jobs:
           stage="${DEPLOY_DIR}/.incoming-${IMAGE_TAG}"
           ssh deploy "mkdir -p $(printf '%q' "$stage")"
           scp "$COMPOSE_FILE" "deploy:${stage}/compose.yaml"
-          scp "$CADDYFILE" "deploy:${stage}/Caddyfile"
+          scp "$NGINX_CONF" "deploy:${stage}/nginx.conf"
           ssh deploy "bash -s" -- "$DEPLOY_DIR" "$IMAGE_TAG" "$HEALTH_MODE" "$HEALTH_URL" "$API_SERVICE" < deploy/deploy.sh

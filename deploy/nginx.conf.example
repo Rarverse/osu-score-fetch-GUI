@@ -6,7 +6,7 @@
 # The ssl_certificate lines are placeholders. Point them at files you manage
 # outside this repository. Forward `/` unchanged. $proxy_add_x_forwarded_for
 # keeps a client-supplied X-Forwarded-For and appends the address Nginx
-# actually saw. Caddy trusts only the docker bridge gateway, then walks that
+# actually saw. The web Nginx trusts only the docker bridge gateway, then walks that
 # list from the right, so a spoofed address to the left is not the visitor IP.
 
 upstream osu_score_web {

@@ -8,7 +8,8 @@ SCRIPT = Path(__file__).resolve().parents[3] / "deploy" / "deploy.sh"
 
 
 @pytest.mark.parametrize("failure", ["pull", "up", "health", "none"])
-def test_deployment_restores_config_and_tag_together(tmp_path, failure):
+@pytest.mark.parametrize("has_previous_nginx", [True, False])
+def test_deployment_restores_config_and_tag_together(tmp_path, failure, has_previous_nginx):
     binaries = tmp_path / "bin"
     binaries.mkdir()
     docker = binaries / "docker"
@@ -26,15 +27,16 @@ if grep -q new compose.yaml && [[ " $* " == *" $FAILURE "* ]]; then exit 1; fi
     sleep.chmod(0o755)
     old = {
         "compose.yaml": "old-compose",
-        "Caddyfile": "old-caddy",
         ".env.deploy": "OTHER=value\nIMAGE_TAG=old\n",
     }
+    if has_previous_nginx:
+        old["nginx.conf"] = "old-nginx"
     for name, value in old.items():
         (tmp_path / name).write_text(value)
     stage = tmp_path / ".incoming-new"
     stage.mkdir()
     (stage / "compose.yaml").write_text("new-compose")
-    (stage / "Caddyfile").write_text("new-caddy")
+    (stage / "nginx.conf").write_text("new-nginx")
     result = subprocess.run(
         ["bash", str(SCRIPT), str(tmp_path), "new", "exec", "http://localhost/health", "api"],
         env={**os.environ, "PATH": f"{binaries}:{os.environ['PATH']}", "FAILURE": failure},
@@ -45,9 +47,12 @@ if grep -q new compose.yaml && [[ " $* " == *" $FAILURE "* ]]; then exit 1; fi
     if failure != "none":
         for name, value in old.items():
             assert (tmp_path / name).read_text() == value
+        if not has_previous_nginx:
+            assert not (tmp_path / "nginx.conf").exists()
         assert (tmp_path / "calls").read_text().endswith("old-composeOTHER=value\nIMAGE_TAG=old\n")
     else:
         assert (tmp_path / "compose.yaml").read_text() == "new-compose"
+        assert (tmp_path / "nginx.conf").read_text() == "new-nginx"
         assert (tmp_path / ".env.deploy").read_text() == "OTHER=value\nIMAGE_TAG=new\n"
     assert not stage.exists()
     assert not list(tmp_path.glob(".rollback.*"))
