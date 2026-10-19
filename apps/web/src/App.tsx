@@ -754,6 +754,7 @@ export default function App() {
           </a>
         </div>
         <p>{t("unofficial")}</p>
+        {/* Temporarily hide private repo link until public
         <a
           href="https://github.com/Rarverse/osu-score-fetch-GUI"
           target="_blank"
@@ -762,6 +763,7 @@ export default function App() {
           GitHub
           <ExternalLink size={12} />
         </a>
+        */}
       </footer>
       <PageScrollbar />
     </div>
