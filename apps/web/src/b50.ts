@@ -1,32 +1,85 @@
 import { locale, t } from "./i18n";
+import { imageUrl } from "./images";
 import { modeLabels, type ScoresResponse } from "./types";
 
-// Only CORS-enabled images enter the canvas; missing artwork uses a placeholder.
+const rankColors: Record<string, string> = {
+  SS: "#e8cf84",
+  S: "#e8cf84",
+  SSH: "#d2dfe6",
+  SH: "#d2dfe6",
+  A: "#9fbea3",
+  B: "#94b0da",
+  C: "#c9a0dc",
+  D: "#e7a06c",
+  F: "#e7808c",
+};
+
+export interface ExportProgress {
+  stage: "images" | "rendering";
+  completed: number;
+  total: number;
+}
+
+// Same-origin cached artwork keeps the canvas exportable without upstream CORS.
 function loadImage(url: string | null): Promise<HTMLImageElement | null> {
   if (!url) return Promise.resolve(null);
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const image = new Image();
-    const finish = (value: HTMLImageElement | null) => {
+    const finish = (loaded: boolean) => {
       clearTimeout(timer);
       image.onload = null;
       image.onerror = null;
-      resolve(value);
+      if (loaded) resolve(image);
+      else reject(new Error(t("artworkFailed")));
     };
-    const timer = setTimeout(() => finish(null), 8000);
-    image.crossOrigin = "anonymous";
-    image.onload = () => finish(image);
-    image.onerror = () => finish(null);
-    image.src = url;
+    // Allow for server-side pacing and reuse the page's same-origin image cache.
+    const timer = setTimeout(() => finish(false), 90_000);
+    image.onload = () => finish(true);
+    image.onerror = () => finish(false);
+    image.src = imageUrl(url);
   });
 }
 
-export async function renderB50(data: ScoresResponse): Promise<Blob> {
-  const scores = data.scores.slice(0, 50);
-  const images = await Promise.all(
-    [data.player.avatar_url, ...scores.map((score) => score.cover_url)].map(
-      loadImage,
-    ),
-  );
+export async function renderBestScores(
+  data: ScoresResponse,
+  limit: number,
+  onProgress?: (progress: ExportProgress) => void,
+): Promise<Blob> {
+  const scores = data.scores.slice(0, limit);
+  const sources = [
+    data.player.avatar_url,
+    ...scores.map((score) => score.cover_url),
+  ];
+  const urls = [...new Set(sources.filter((url): url is string => !!url))];
+  const loaded = new Map<string, HTMLImageElement | null>();
+  let next = 0;
+  let failed = false;
+  onProgress?.({ stage: "images", completed: 0, total: urls.length });
+  const worker = async () => {
+    while (!failed && next < urls.length) {
+      const url = urls[next++];
+      try {
+        loaded.set(url, await loadImage(url));
+      } catch (error) {
+        failed = true;
+        throw error;
+      }
+      if (!failed)
+        onProgress?.({
+          stage: "images",
+          completed: loaded.size,
+          total: urls.length,
+        });
+    }
+  };
+  // Avoid creating 51 competing requests, and load repeated covers only once.
+  await Promise.all(Array.from({ length: Math.min(2, urls.length) }, worker));
+  const images = sources.map((url) => (url ? (loaded.get(url) ?? null) : null));
+  onProgress?.({
+    stage: "rendering",
+    completed: urls.length,
+    total: urls.length,
+  });
   const canvas = document.createElement("canvas");
   canvas.width = 1600;
   canvas.height = 370 + Math.ceil(scores.length / 2) * 136;
@@ -92,7 +145,7 @@ export async function renderB50(data: ScoresResponse): Promise<Blob> {
   ctx.fillStyle = "#101116";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   text("RARVERSE  /  RARSU", 40, 48, 20, "#c9b2ff");
-  text("BEST 50", 1350, 52, 34, "#c9b2ff");
+  text(`BEST ${limit}`, 1350, 52, 34, "#c9b2ff");
   artwork(images[0], 40, 80, 112);
   text(data.player.username, 180, 120, 36, "#f1eff7", 1130);
   text(
@@ -144,7 +197,14 @@ export async function renderB50(data: ScoresResponse): Promise<Blob> {
       "#d0cbd8",
       460,
     );
-    text(score.rank, x + 600, y + 38, 22, "#e6d79e", 130);
+    text(
+      score.rank,
+      x + 600,
+      y + 38,
+      22,
+      rankColors[score.rank] ?? "#d0cbd8",
+      130,
+    );
     text(`${number(score.pp)} pp`, x + 590, y + 88, 22, "#c9b2ff", 146);
   });
   text(t("srNote"), 40, canvas.height - 42, 16, "#a49bb4");
@@ -163,13 +223,17 @@ export async function renderB50(data: ScoresResponse): Promise<Blob> {
   });
 }
 
-export function saveB50(blob: Blob, data: ScoresResponse) {
+export function saveBestScores(
+  blob: Blob,
+  data: ScoresResponse,
+  limit: number,
+) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
   // biome-ignore lint/suspicious/noControlCharactersInRegex: Strip invalid filename characters.
   const name = data.player.username.replace(/[<>:"/\\|?*\u0000-\u001f]/g, "_");
-  link.download = `${name}-${data.mode}-B50.png`;
+  link.download = `${name}-${data.mode}-B${limit}.png`;
   document.body.append(link);
   link.click();
   link.remove();

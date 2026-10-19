@@ -1063,10 +1063,46 @@ footer a:hover {
   color: #d9caff;
   font-size: 12px;
 }
-.download-actions p {
-  color: #f3a7ba;
+.download-status {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 16px;
+  border: 1px solid #c9b2ff40;
+  border-radius: 8px;
+  background: #1c1b25;
+  color: #d9caff;
+}
+.download-status > svg {
+  flex-shrink: 0;
+}
+.download-status > div {
+  flex: 1;
+  min-width: 0;
+}
+.download-status strong {
+  font-size: 13px;
+}
+.download-status p {
+  color: #b1aebb;
   font-size: 12px;
-  margin: 0;
+  margin: 6px 0 0;
+}
+.download-status progress {
+  display: block;
+  width: 100%;
+  height: 8px;
+  margin: 12px 0 8px;
+  accent-color: #c9b2ff;
+}
+.download-status small {
+  color: #b1aebb;
+  font-size: 11px;
+}
+.download-status-error,
+.download-status-error p {
+  color: #f3a7ba;
 }
 .search-options,
 .mode-tabs {

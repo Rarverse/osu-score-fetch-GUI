@@ -16,10 +16,11 @@ import {
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import Markdown from "react-markdown";
 import { ApiError, getScores, waitForRetry } from "./api";
-import { renderB50, saveB50 } from "./b50";
+import { type ExportProgress, renderBestScores, saveBestScores } from "./b50";
 import introEn from "./content/intro.en.md?raw";
 import intro from "./content/intro.md?raw";
 import { language, locale, t } from "./i18n";
+import { imageUrl } from "./images";
 import ModeIcon from "./ModeIcon";
 import {
   modeLabels,
@@ -46,7 +47,7 @@ function ScoreRow({ score, position }: { score: Score; position: number }) {
         className="map-cover"
         style={
           score.cover_url
-            ? { backgroundImage: `url(${score.cover_url})` }
+            ? { backgroundImage: `url(${imageUrl(score.cover_url)})` }
             : undefined
         }
       >
@@ -110,13 +111,18 @@ export default function App() {
   const [mode, setMode] = useState<QueryMode>("auto");
   const [exporting, setExporting] = useState(false);
   const [downloadError, setDownloadError] = useState("");
+  const [downloadProgress, setDownloadProgress] =
+    useState<ExportProgress | null>(null);
+  const [downloadReady, setDownloadReady] = useState(false);
   const [loading, setLoading] = useState(false);
   const [waiting, setWaiting] = useState<WaitingState | null>(null);
   const [error, setError] = useState("");
   const [result, setResult] = useState<ScoresResponse | null>(null);
+  const [resultLimit, setResultLimit] = useState(20);
   const [cache, setCache] = useState("");
   const input = useRef<HTMLInputElement>(null);
   const request = useRef<AbortController | null>(null);
+  const downloadInProgress = useRef(false);
   const secureContext =
     window.isSecureContext ||
     ["localhost", "127.0.0.1", "::1"].includes(location.hostname);
@@ -156,6 +162,8 @@ export default function App() {
     setWaiting(null);
     setCache("");
     setDownloadError("");
+    setDownloadProgress(null);
+    setDownloadReady(false);
     const credentials = useOwnApi
       ? { clientId: apiClientId.trim(), clientSecret: apiClientSecret.trim() }
       : undefined;
@@ -188,6 +196,7 @@ export default function App() {
           );
           if (!controller.signal.aborted) {
             setResult(response.data);
+            setResultLimit(selectedLimit);
             setCache(response.cache);
           }
           break;
@@ -227,12 +236,10 @@ export default function App() {
     if (next === mode) return;
     setMode(next);
     setError("");
-    if (result) void fetchScores(result.player.username, next);
   }
 
   function changeLimit(next: number) {
     setLimit(next);
-    if (result) void fetchScores(result.player.username, mode, next);
   }
 
   function cancelQuery() {
@@ -241,38 +248,29 @@ export default function App() {
     setLoading(false);
   }
 
-  async function downloadB50() {
-    if (!result || exporting) return;
+  async function downloadScores() {
+    if (!result || downloadInProgress.current) return;
+    downloadInProgress.current = true;
     const controller = new AbortController();
     request.current = controller;
     setExporting(true);
     setDownloadError("");
+    setDownloadReady(false);
     try {
-      const data =
-        limit === 50
-          ? result
-          : (
-              await getScores(
-                String(result.player.user_id),
-                50,
-                result.mode,
-                controller.signal,
-                useOwnApi
-                  ? {
-                      clientId: apiClientId.trim(),
-                      clientSecret: apiClientSecret.trim(),
-                    }
-                  : undefined,
-              )
-            ).data;
-      const blob = await renderB50(data);
-      if (!controller.signal.aborted) saveB50(blob, data);
+      const blob = await renderBestScores(result, resultLimit, (progress) => {
+        if (!controller.signal.aborted) setDownloadProgress(progress);
+      });
+      if (!controller.signal.aborted) {
+        saveBestScores(blob, result, resultLimit);
+        setDownloadReady(true);
+      }
     } catch (failure) {
       if (!controller.signal.aborted)
         setDownloadError(
-          failure instanceof ApiError ? failure.message : t("downloadFailed"),
+          failure instanceof Error ? failure.message : t("downloadFailed"),
         );
     } finally {
+      downloadInProgress.current = false;
       setExporting(false);
     }
   }
@@ -379,7 +377,9 @@ export default function App() {
                   </button>
                 ))}
               </fieldset>
-              <label htmlFor="limit">{t("bestPerformance")}</label>
+              <label className="sr-only" htmlFor="limit">
+                {t("scoreLimit")}
+              </label>
               <select
                 id="limit"
                 value={limit}
@@ -478,7 +478,7 @@ export default function App() {
               <div className="player-identity">
                 {result.player.avatar_url ? (
                   <img
-                    src={result.player.avatar_url}
+                    src={imageUrl(result.player.avatar_url)}
                     alt=""
                     className="avatar"
                   />
@@ -550,17 +550,63 @@ export default function App() {
                 type="button"
                 className="download-button"
                 disabled={exporting || !result.scores.length}
-                onClick={() => void downloadB50()}
+                onClick={() => void downloadScores()}
               >
                 {exporting ? (
                   <LoaderCircle size={16} className="spin" />
                 ) : (
                   <Download size={16} />
                 )}
-                {exporting ? t("downloadingB50") : t("downloadB50")}
+                {exporting
+                  ? t("downloadingImage")
+                  : t("downloadImage", { count: resultLimit })}
               </button>
-              {downloadError && <p role="alert">{downloadError}</p>}
             </div>
+            {(exporting || downloadReady) && (
+              <div className="download-status" role="status" aria-live="polite">
+                {exporting ? (
+                  <LoaderCircle size={20} className="spin" />
+                ) : (
+                  <Check size={20} />
+                )}
+                <div>
+                  <strong>
+                    {exporting
+                      ? t("downloadTitle", { count: resultLimit })
+                      : t("downloadReady")}
+                  </strong>
+                  <p>
+                    {exporting
+                      ? downloadProgress?.stage === "images"
+                        ? t("downloadImages", {
+                            completed: downloadProgress.completed,
+                            total: downloadProgress.total,
+                          })
+                        : t("downloadRendering")
+                      : t("downloadBrowser")}
+                  </p>
+                  {exporting && downloadProgress?.stage === "images" && (
+                    <>
+                      <progress
+                        value={downloadProgress.completed}
+                        max={downloadProgress.total || 1}
+                        aria-label={t("downloadImageProgress")}
+                      />
+                      <small>{t("downloadPacing")}</small>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+            {downloadError && (
+              <div
+                className="download-status download-status-error"
+                role="alert"
+              >
+                <CircleAlert size={20} />
+                <p>{downloadError}</p>
+              </div>
+            )}
             {result.scores.length ? (
               <div className="score-list">
                 {result.scores.map((score, index) => (

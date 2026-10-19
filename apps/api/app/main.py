@@ -1,4 +1,5 @@
 import logging
+from asyncio import Lock as AsyncLock
 from threading import Lock
 
 from fastapi import FastAPI, Request
@@ -7,6 +8,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.config import Settings
+from app.routers.images import IMAGE_TTL
+from app.routers.images import router as images_router
 from app.routers.players import router
 from app.services.cache import JsonCache
 from app.services.osu_client import OsuClient, ServiceError
@@ -26,6 +29,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         settings.negative_cache_ttl,
         settings.negative_cache_ttl,
     )
+    app.state.images = JsonCache(
+        settings.cache_path / "images", IMAGE_TTL, max(IMAGE_TTL, settings.cache_retention)
+    )
+    app.state.image_lock = AsyncLock()
     app.state.stats = UsageStats(settings.stats_path)
     app.state.osu = OsuClient(settings)
     app.state.limiter = RateLimiter(settings.rate_limit_window)
@@ -67,6 +74,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return {"status": "ok", "modes": ["osu", "taiko", "fruits", "mania"]}
 
     app.include_router(router)
+    app.include_router(images_router)
     return app
 
 
