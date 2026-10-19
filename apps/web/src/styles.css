@@ -162,10 +162,12 @@ main {
   box-shadow: 0 0 8px #c9b2ff40;
 }
 .hero-description {
-  font-size: 14px;
-  line-height: 1.9;
-  color: #9696a3;
+  font-size: 19px;
+  font-weight: 500;
+  line-height: 1.55;
+  color: #e4e2ea;
   letter-spacing: 0.3px;
+  text-align: center;
 }
 .search-panel {
   display: grid;
@@ -326,7 +328,7 @@ main {
   gap: 9px;
   color: #aaa7b5;
   font-size: 12px;
-  margin-top: 14px;
+  margin-top: 28px;
 }
 .search-note svg {
   color: #b09ccf;
@@ -948,7 +950,7 @@ footer a:hover {
     padding: 44px 0 30px;
   }
   .hero-description {
-    font-size: 12px;
+    font-size: 16px;
   }
   .search-panel {
     margin-top: 25px;
@@ -1132,6 +1134,7 @@ footer a:hover {
 }
 @media (min-width: 900px) {
   .hero-description {
+    font-size: 17px;
     white-space: nowrap;
     letter-spacing: 0;
   }
