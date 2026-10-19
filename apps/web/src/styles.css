@@ -36,16 +36,21 @@ button {
   cursor: pointer;
 }
 button:disabled {
-  cursor: wait;
+  cursor: not-allowed;
   opacity: 0.7;
 }
 a:focus-visible,
 button:focus-visible,
-select:focus-visible {
+select:focus-visible,
+summary:focus-visible {
   outline: 2px solid #c9b2ff;
   outline-offset: 5px;
 }
 input:focus-visible {
+  outline: 2px solid #c9b2ff;
+  outline-offset: 2px;
+}
+.search-input-wrap input:focus-visible {
   outline: none;
 }
 svg {
@@ -58,6 +63,9 @@ h3 {
   margin: 0;
 }
 .app-shell {
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
   max-width: 1280px;
   margin: 0 auto;
   padding: 0 64px;
@@ -106,6 +114,8 @@ h3 {
   color: #c9b2ff;
 }
 main {
+  width: 100%;
+  flex: 1;
   max-width: 960px;
   margin: 0 auto;
 }
@@ -122,15 +132,6 @@ main {
   background: #c9b2ff;
   box-shadow: 0 0 8px #c9b2ff40;
 }
-h1 {
-  position: relative;
-  display: inline-block;
-  font-size: clamp(38px, 4.5vw, 56px);
-  line-height: 1.3;
-  letter-spacing: -2px;
-  font-weight: 600;
-  margin: 22px 0 17px;
-}
 .hero-description {
   font-size: 14px;
   line-height: 1.9;
@@ -139,7 +140,7 @@ h1 {
 }
 .search-panel {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   max-width: 690px;
   margin: 33px auto 0;
   background: #191a22;
@@ -149,11 +150,12 @@ h1 {
   box-shadow: 0 6px 40px #00000016;
 }
 .search-input-wrap {
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 14px;
   padding: 0 15px;
-  color: #797986;
+  color: #aaa7b5;
 }
 .search-input-wrap input {
   width: 100%;
@@ -165,7 +167,7 @@ h1 {
   font-size: 14px;
 }
 .search-input-wrap input::placeholder {
-  color: #777783;
+  color: #aaa7b5;
 }
 .search-panel:focus-within {
   border-color: #9f89ca;
@@ -176,8 +178,8 @@ h1 {
   gap: 3px;
   padding: 4px 6px;
   white-space: nowrap;
-  font-size: 10px;
-  color: #8b8896;
+  font-size: 12px;
+  color: #aaa7b5;
   border: 1px solid #3a3845;
   border-radius: 4px;
 }
@@ -207,10 +209,11 @@ h1 {
   border-top: 1px solid #ffffff0b;
   margin-top: 8px;
   text-align: left;
-  color: #8e8c9a;
-  font-size: 11px;
+  color: #aaa7b5;
+  font-size: 12px;
 }
 .mode-tabs {
+  flex: 1;
   display: flex;
   gap: 3px;
   padding: 0;
@@ -224,31 +227,17 @@ h1 {
   justify-content: center;
   gap: 5px;
   background: transparent;
-  color: #8e8c9a;
+  color: #aaa7b5;
   border: 0;
   border-radius: 5px;
   padding: 6px 9px;
-  font-size: 11px;
+  font-size: 12px;
+  min-height: 40px;
   white-space: nowrap;
 }
 .mode-icon {
   width: 14px;
   height: 14px;
-}
-.mode-badge {
-  display: grid;
-  place-items: center;
-  width: 34px;
-  height: 34px;
-  flex-shrink: 0;
-  border-radius: 8px;
-  background: #101116;
-  color: #c9b2ff;
-  border: 1px solid #34333f;
-}
-.mode-badge .mode-icon {
-  width: 18px;
-  height: 18px;
 }
 .mode-tabs button[aria-pressed="true"] {
   background: #30283e;
@@ -278,8 +267,14 @@ h1 {
     flex-wrap: wrap;
   }
   .mode-tabs {
+    flex: 1 0 100%;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     width: 100%;
     margin-bottom: 5px;
+  }
+  .mode-tabs button:first-of-type {
+    grid-column: span 2;
   }
   .mode-tabs button {
     flex: 1;
@@ -291,17 +286,17 @@ h1 {
   color: #b1aebb;
   border: 1px solid #3b3548;
   border-radius: 5px;
-  font-size: 10px;
+  font-size: 12px;
   padding: 4px 6px;
-  margin-left: auto;
+  min-height: 36px;
 }
 .search-note {
   display: flex;
   justify-content: center;
   align-items: center;
   gap: 9px;
-  color: #737380;
-  font-size: 10px;
+  color: #aaa7b5;
+  font-size: 12px;
   margin-top: 14px;
 }
 .search-note svg {
@@ -315,9 +310,19 @@ h1 {
   font-size: 12px;
 }
 .api-credentials summary {
-  display: inline-block;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  list-style: none;
   cursor: pointer;
   color: #c9b2ff;
+}
+.api-credentials summary::-webkit-details-marker {
+  display: none;
+}
+.api-credentials[open] summary > svg {
+  transform: rotate(90deg);
 }
 .api-credentials-content {
   display: grid;
@@ -337,7 +342,8 @@ h1 {
   align-items: center;
   gap: 8px;
 }
-.api-credentials-content > label:not(.api-credentials-toggle) {
+.api-credentials-content > label:not(.api-credentials-toggle),
+.secret-field {
   display: grid;
   gap: 6px;
 }
@@ -353,8 +359,8 @@ h1 {
   opacity: 0.55;
 }
 .api-credentials-note {
-  color: #858390;
-  font-size: 11px;
+  color: #aaa7b5;
+  font-size: 12px;
 }
 .api-credentials-content a {
   display: flex;
@@ -383,10 +389,20 @@ h1 {
   margin: 9px 0 9px;
   letter-spacing: -0.4px;
 }
-.start-panel p {
+.usage-steps {
+  max-width: 590px;
+  margin: 16px auto 0;
+  padding-left: 24px;
+  text-align: left;
   font-size: 12px;
   line-height: 1.8;
-  color: #7e7e8d;
+  color: #a5a3af;
+}
+.usage-steps li + li {
+  margin-top: 10px;
+}
+.usage-steps li::marker {
+  color: #c9b2ff;
 }
 .feature-strip {
   display: flex;
@@ -407,11 +423,11 @@ h1 {
 }
 .feature-strip span {
   color: #a8a5b1;
-  font-size: 11px;
+  font-size: 12px;
 }
 .feature-strip small {
-  font-size: 9px;
-  color: #62616e;
+  font-size: 12px;
+  color: #aaa7b5;
 }
 footer {
   border-top: 1px solid #ffffff0b;
@@ -420,8 +436,8 @@ footer {
   justify-content: space-between;
   gap: 20px;
   padding: 25px 0 30px;
-  color: #686875;
-  font-size: 10px;
+  color: #aaa7b5;
+  font-size: 12px;
 }
 footer > div {
   display: flex;
@@ -497,7 +513,7 @@ footer a:hover {
 }
 .waiting-countdown span {
   display: block;
-  font-size: 10px;
+  font-size: 12px;
 }
 .waiting-panel button {
   border: 1px solid #58476b;
@@ -556,7 +572,7 @@ footer a:hover {
   word-break: break-word;
 }
 .player-identity p {
-  font-size: 11px;
+  font-size: 12px;
   color: #968ba5;
   margin-top: 6px;
 }
@@ -574,7 +590,7 @@ footer a:hover {
   gap: 8px;
 }
 .player-stats span {
-  font-size: 10px;
+  font-size: 12px;
   color: #99909f;
 }
 .player-stats strong {
@@ -584,7 +600,7 @@ footer a:hover {
   white-space: nowrap;
 }
 .player-stats small {
-  font-size: 11px;
+  font-size: 12px;
   color: #aaa1b8;
   margin-left: 5px;
 }
@@ -610,8 +626,8 @@ footer a:hover {
   font-weight: 500;
 }
 .results-heading > div > span {
-  font-size: 10px;
-  color: #75717e;
+  font-size: 12px;
+  color: #aaa7b5;
   border: 1px solid #34303d;
   border-radius: 5px;
   padding: 3px 6px;
@@ -622,7 +638,7 @@ footer a:hover {
   align-items: center;
   gap: 7px;
   color: #8d849b;
-  font-size: 10px;
+  font-size: 12px;
 }
 .score-list {
   border: 1px solid #ffffff0c;
@@ -645,7 +661,7 @@ footer a:hover {
 }
 .position {
   font-family: "Space Grotesk", sans-serif;
-  color: #797181;
+  color: #aaa7b5;
   font-size: 12px;
   width: 20px;
   flex-shrink: 0;
@@ -679,8 +695,8 @@ footer a:hover {
   color: #c9b2ff;
 }
 .map-info p {
-  font-size: 10px;
-  color: #86818e;
+  font-size: 12px;
+  color: #aaa7b5;
   margin: 4px 0 7px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -700,21 +716,21 @@ footer a:hover {
   display: flex;
   align-items: center;
   gap: 4px;
-  font-size: 9px;
+  font-size: 12px;
   color: #dfc48b;
   border-radius: 3px;
   padding: 2px 4px;
 }
 .mod {
-  font-size: 9px;
+  font-size: 12px;
   color: #c9b2ff;
   background: #30283e;
   padding: 2px 5px;
   border-radius: 3px;
 }
 .no-mod {
-  color: #666171;
-  font-size: 9px;
+  color: #aaa7b5;
+  font-size: 12px;
 }
 .grade {
   font-family: "Space Grotesk", sans-serif;
@@ -752,13 +768,13 @@ footer a:hover {
   font-weight: 500;
 }
 .accuracy small {
-  font-size: 10px;
+  font-size: 12px;
   color: #94909f;
   margin-left: 2px;
 }
 .accuracy span {
-  color: #777280;
-  font-size: 9px;
+  color: #aaa7b5;
+  font-size: 12px;
 }
 .score-pp {
   display: flex;
@@ -776,15 +792,15 @@ footer a:hover {
   color: #ccb5fa;
 }
 .score-pp span {
-  font-size: 9px;
-  color: #857791;
+  font-size: 12px;
+  color: #aaa7b5;
 }
 .result-footnote {
   display: flex;
   justify-content: space-between;
   gap: 16px;
-  font-size: 9px;
-  color: #726a7e;
+  font-size: 12px;
+  color: #aaa7b5;
   line-height: 1.7;
   margin: 13px 1px 0;
 }
@@ -821,6 +837,9 @@ footer a:hover {
 }
 @media (max-width: 900px) {
   .app-shell {
+    min-height: 100svh;
+    display: flex;
+    flex-direction: column;
     padding: 0 30px;
   }
   .player-card {
@@ -854,6 +873,9 @@ footer a:hover {
 }
 @media (max-width: 600px) {
   .app-shell {
+    min-height: 100svh;
+    display: flex;
+    flex-direction: column;
     padding: 0 20px;
   }
   .site-header {
@@ -864,15 +886,10 @@ footer a:hover {
     gap: 8px;
   }
   .header-link {
-    font-size: 10px;
+    font-size: 12px;
   }
   .hero {
     padding: 44px 0 30px;
-  }
-  h1 {
-    font-size: 36px;
-    letter-spacing: -1.5px;
-    margin: 22px 0 16px;
   }
   .hero-description {
     font-size: 12px;
@@ -880,9 +897,10 @@ footer a:hover {
   .search-panel {
     margin-top: 25px;
     padding: 6px;
-    grid-template-columns: 1fr auto;
+    grid-template-columns: minmax(0, 1fr) auto;
   }
   .search-input-wrap {
+    min-width: 0;
     padding: 0 8px;
     gap: 8px;
   }
@@ -898,7 +916,7 @@ footer a:hover {
   }
   .search-button {
     padding: 0 11px;
-    font-size: 11px;
+    font-size: 12px;
     gap: 6px;
   }
   .search-button > svg:last-child {
@@ -907,7 +925,7 @@ footer a:hover {
   .search-options {
     padding: 12px 8px 6px;
     gap: 8px;
-    font-size: 9px;
+    font-size: 12px;
   }
   .start-panel {
     min-height: 175px;
@@ -925,15 +943,15 @@ footer a:hover {
     width: 14px;
   }
   .feature-strip span {
-    font-size: 10px;
+    font-size: 12px;
   }
   .feature-strip small {
-    font-size: 8px;
+    font-size: 12px;
   }
   footer {
     padding: 21px 0;
     gap: 15px;
-    font-size: 9px;
+    font-size: 12px;
   }
   footer > div {
     gap: 10px;
@@ -957,7 +975,7 @@ footer a:hover {
     font-size: 20px;
   }
   .player-stats span {
-    font-size: 9px;
+    font-size: 12px;
   }
   .score-row {
     display: grid;
@@ -966,7 +984,7 @@ footer a:hover {
     padding: 15px 11px;
   }
   .position {
-    font-size: 10px;
+    font-size: 12px;
     grid-row: 1 / 3;
   }
   .map-cover {
@@ -985,7 +1003,7 @@ footer a:hover {
     display: none;
   }
   .map-info p {
-    font-size: 9px;
+    font-size: 12px;
     max-width: 160px;
   }
   .grade {
@@ -1006,10 +1024,10 @@ footer a:hover {
     align-items: center;
   }
   .accuracy strong {
-    font-size: 10px;
+    font-size: 12px;
   }
   .accuracy span {
-    font-size: 8px;
+    font-size: 12px;
   }
   .score-pp {
     grid-column: 4;
@@ -1026,16 +1044,16 @@ footer a:hover {
     gap: 4px;
   }
   .results-heading > div > span {
-    font-size: 8px;
+    font-size: 12px;
   }
   .search-note {
-    font-size: 9px;
+    font-size: 12px;
   }
   .error-panel {
     padding: 17px;
   }
   .error-panel p {
-    font-size: 11px;
+    font-size: 12px;
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -1100,7 +1118,7 @@ footer a:hover {
 }
 .download-status small {
   color: #b1aebb;
-  font-size: 11px;
+  font-size: 12px;
 }
 .download-status-error,
 .download-status-error p {
@@ -1109,4 +1127,61 @@ footer a:hover {
 .search-options,
 .mode-tabs {
   flex-wrap: wrap;
+}
+
+.limit-label {
+  white-space: nowrap;
+}
+.secret-input {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+.secret-input input {
+  min-width: 0;
+}
+.secret-input button,
+.loading-panel button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid #58476b;
+  border-radius: 6px;
+  background: #242030;
+  color: #d9caff;
+  white-space: nowrap;
+}
+.feature-strip > div:first-child svg {
+  grid-row: auto;
+}
+@media (max-width: 600px) {
+  .brand {
+    font-size: 17px;
+    letter-spacing: -0.5px;
+  }
+  .site-header {
+    gap: 12px;
+  }
+  .mode-tabs button {
+    min-height: 44px;
+    flex: 1 1 auto;
+  }
+  .search-options select {
+    min-height: 44px;
+  }
+  .feature-strip {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 20px;
+  }
+  .loading-panel {
+    flex-wrap: wrap;
+  }
+  .results-heading {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
 }

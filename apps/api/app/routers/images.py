@@ -60,7 +60,7 @@ def cached_image(cache, key: str) -> Response | None:
 
 
 def fetch_image(url: str, limiter: UpstreamLimiter) -> tuple[bytes, str]:
-    # OAuth, scores and artwork use the same process-wide paced budget.
+    # Artwork has its own paced budget so CDN traffic cannot block score lookups.
     limiter.acquire()
     try:
         with requests.get(url, timeout=(5, 15), stream=True, allow_redirects=False) as upstream:
@@ -103,7 +103,7 @@ async def get_image(state, url: str) -> Response:
             while True:
                 try:
                     content, media_type = await run_in_threadpool(
-                        fetch_image, url, state.osu.limiter
+                        fetch_image, url, state.image_limiter
                     )
                     break
                 except UpstreamBusy as busy:

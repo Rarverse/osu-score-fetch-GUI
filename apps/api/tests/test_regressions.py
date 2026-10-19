@@ -82,3 +82,18 @@ def test_successful_id_query_invalidates_negative_name_cache_across_modes(tmp_pa
     assert client.get("/api/v1/players/123/scores").status_code == 200
     assert client.get("/api/v1/players/Player/scores").status_code == 200
     assert client.get("/api/v1/players/Player/scores?mode=osu").status_code == 200
+
+
+@pytest.mark.parametrize("status", [400, 401])
+def test_rejected_personal_credentials_are_actionable(status, monkeypatch):
+    client = OsuClient(Settings(_env_file=None))
+    response = requests.Response()
+    response.status_code = status
+    monkeypatch.setattr(
+        client, "get_ossapi_client", Mock(side_effect=requests.HTTPError(response=response))
+    )
+    with pytest.raises(ServiceError) as failure:
+        client.get_user_scores("Player", None, 123, "test-only-secret")
+    assert failure.value.status == 422
+    assert failure.value.code == "INVALID_CREDENTIALS"
+    assert failure.value.retry_after is None

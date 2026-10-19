@@ -192,7 +192,7 @@ def paced_clock(monkeypatch):
     return clock
 
 
-def test_artwork_oauth_and_api_share_pacing_and_budget(tmp_path, monkeypatch, paced_clock):
+def test_artwork_and_api_have_independent_paced_budgets(tmp_path, monkeypatch, paced_clock):
     from requests.adapters import HTTPAdapter
 
     from app.services.osu_client import TimeoutAdapter
@@ -220,7 +220,9 @@ def test_artwork_oauth_and_api_share_pacing_and_budget(tmp_path, monkeypatch, pa
     assert client.get("/api/v1/images", params={"url": AVATAR}).status_code == 200
     adapter.send(requests.Request("GET", "https://osu.ppy.sh/api/v2/users/2").prepare())
     assert client.get("/api/v1/images", params={"url": COVER}).status_code == 200
-    assert times == [0, 20, 40, 60]  # A configured 3/minute applies to every upstream path.
+    assert times == [0, 0, 20, 20]
+    assert list(app.state.osu.limiter.requests) == [0, 20]
+    assert list(app.state.image_limiter.requests) == [0, 20]
     before = len(app.state.osu.limiter.requests)
     assert client.get("/api/v1/images", params={"url": COVER}).headers["x-cache"] == "HIT"
     assert len(app.state.osu.limiter.requests) == before
@@ -356,3 +358,26 @@ def test_background_queue_is_bounded_and_skips_invalid_urls(tmp_path):
     asyncio.run(enqueue_images(app.state, urls))
     assert app.state.image_queue.qsize() == 256
     assert len(app.state.image_pending) == 256
+
+
+def test_artwork_cooldown_does_not_block_personal_api_lookup(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    app = make_app(tmp_path)
+    app.state.image_limiter.defer("60")
+    api = MagicMock()
+    api.user.return_value = SimpleNamespace(
+        id=2,
+        username="Player",
+        country_code="JP",
+        avatar_url=AVATAR,
+        playmode="osu",
+        statistics=None,
+    )
+    api.user_scores.return_value = []
+    get_client = MagicMock(return_value=api)
+    monkeypatch.setattr(app.state.osu, "get_ossapi_client", get_client)
+    result = app.state.osu.get_user_scores("Player", None, 123, "test-only-secret")
+    assert result.player.user_id == 2
+    get_client.assert_called_once_with(123, "test-only-secret")
+    assert app.state.osu.limiter.cooldown_until == 0

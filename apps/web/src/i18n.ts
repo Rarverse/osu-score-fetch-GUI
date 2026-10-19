@@ -3,7 +3,6 @@ const zh = {
   home: "Rarsu查分器首页",
   description:
     "Rarsu查分器：输入 osu! 用户名，直接看 TA 的 Top 20/50 成绩。四个模式都能查，不用登录。",
-  currentMode: "当前模式：{mode}",
   visitOsu: "访问 osu!",
   playerLabel: "玩家用户名或 ID",
   playerPlaceholder: "输入玩家用户名或 ID",
@@ -30,9 +29,13 @@ const zh = {
   publicScores: "公开成绩",
   ownApi: "使用自己的 osu! API",
   ownApiDescription:
-    "填写 osu! OAuth 应用的 Client ID 和 Client Secret；本工具使用 client credentials 和 public scope，无需用户授权。仅用此方式时，Callback URL 可留空。留空凭据时使用站点配置。",
+    "默认使用站点 API。启用下方选项后，请填写 osu! OAuth 应用的 Client ID 和 Client Secret（不是旧版 API Key）；可点击「显示」核对密钥。Callback URL 可留空。",
   clientId: "Client ID",
   clientSecret: "Client Secret",
+  showSecret: "显示 API 密钥",
+  hideSecret: "隐藏 API 密钥",
+  show: "显示",
+  hide: "隐藏",
   credentialsInMemory:
     "凭据仅保留在此页面内存中，并通过 HTTPS 发送；关闭或刷新页面后需要重新填写。",
   createOauth: "在 osu! 创建 OAuth 应用",
@@ -56,13 +59,18 @@ const zh = {
   srNote: "SR 为谱面基础值（未应用 mods）；pp 为 osu! 返回值。",
   updated: "更新于 {date}",
   instructions: "查询说明",
-  startTitle: "输入玩家用户名或 ID",
-  startDescription: "默认按玩家首选模式查询，也可手动选择模式。",
+  startTitle: "输入 osu! 玩家用户名或数字 ID，无需登录。",
+  startDescription:
+    "选择游戏模式和 Top 20 / Top 50；「玩家默认」会使用该玩家的首选模式。",
+  downloadInstructions:
+    "点击「查询成绩」查看最佳表现；查询完成后，可下载对应的 B20 / B50 PNG 图片。",
   keyStats: "关键数据",
   fourModes: "四种模式",
   unofficial: "非官方 fan-made 项目，与 peppy / osu! 无隶属关系。",
   busyTitle: "查询服务繁忙，请稍候",
-  busyDescription: "当前查询较多，你的查询已保留。",
+  busyDescription: "查询通道正忙，将自动重试，也可以取消等待。",
+  upstreamBusyDescription:
+    "正在等待 osu! API 请求额度恢复。使用自己的 API 也需遵守站点与上游限流；恢复后自动重试。",
   retryCountdown: "{seconds} 秒后自动重试",
   retryNow: "正在重新查询…",
   retryAttempt: "第 {attempt} / 5 次重试",
@@ -79,7 +87,8 @@ const zh = {
   RATE_LIMITED: "查询过于频繁，请稍后重试。",
   UPSTREAM_ERROR: "osu! 服务暂时无法访问，请稍后重试。",
   NOT_CONFIGURED: "服务端尚未配置 osu! OAuth 凭据。",
-  INVALID_CREDENTIALS: "请同时提供有效的 osu! Client ID 和 Client Secret。",
+  INVALID_CREDENTIALS:
+    "API 凭据无效，请核对 osu! Client ID 和 Client Secret；可点击「显示」检查密钥。",
   SERVER_BUSY: "当前查询人数较多，请稍候。",
   UPSTREAM_BUSY: "查询服务正在等待 osu! 请求额度。",
 };
@@ -91,7 +100,6 @@ const en: Record<MessageKey, string> = {
   home: "Rarsu Score Checker home",
   description:
     "Rarsu Score Checker: type an osu! username and see their top 20/50 plays. Works for all four modes, no login needed.",
-  currentMode: "Current mode: {mode}",
   visitOsu: "Visit osu!",
   playerLabel: "Player username or ID",
   playerPlaceholder: "Enter a player username or ID",
@@ -120,9 +128,13 @@ const en: Record<MessageKey, string> = {
   publicScores: "Public scores",
   ownApi: "Use my osu! API credentials",
   ownApiDescription:
-    "Enter the Client ID and Client Secret from your osu! OAuth application. This uses client credentials with the public scope, so user authorization is not needed and the Callback URL can be blank. Leave credentials blank to use the site's configuration.",
+    "The site API is used by default. Enable the option below to enter your osu! OAuth Client ID and Client Secret (not a legacy API key). Select Show to check your secret. The Callback URL can be blank.",
   clientId: "Client ID",
   clientSecret: "Client Secret",
+  showSecret: "Show API secret",
+  hideSecret: "Hide API secret",
+  show: "Show",
+  hide: "Hide",
   credentialsInMemory:
     "Credentials stay in this page's memory and are sent over HTTPS. You will need to enter them again after closing or refreshing the page.",
   createOauth: "Create an osu! OAuth application",
@@ -146,15 +158,19 @@ const en: Record<MessageKey, string> = {
   srNote: "SR is the base difficulty without mods; pp comes from osu!.",
   updated: "Updated {date}",
   instructions: "Search instructions",
-  startTitle: "Enter a player username or ID",
+  startTitle: "Enter an osu! username or numeric ID. No sign-in required.",
   startDescription:
-    "Search using the player's default mode, or choose a mode manually.",
+    "Choose a mode and Top 20 / Top 50. Player default uses the player's preferred mode.",
+  downloadInstructions:
+    "Select Search scores to view their best plays, then download a B20 / B50 PNG image.",
   keyStats: "Key stats",
   fourModes: "Four modes",
   unofficial: "Unofficial fan-made project. Not affiliated with peppy or osu!.",
   busyTitle: "The service is busy. Please wait.",
   busyDescription:
-    "Your query has been saved while other searches are being processed.",
+    "The query service is busy. We will retry automatically; you can cancel at any time.",
+  upstreamBusyDescription:
+    "Waiting for osu! API capacity. Personal credentials still follow site and upstream limits. We will retry automatically.",
   retryCountdown: "Retrying automatically in {seconds}s",
   retryNow: "Retrying your search…",
   retryAttempt: "Retry {attempt} of 5",
@@ -171,7 +187,8 @@ const en: Record<MessageKey, string> = {
   RATE_LIMITED: "Too many searches. Please try again later.",
   UPSTREAM_ERROR: "osu! is temporarily unavailable. Please try again later.",
   NOT_CONFIGURED: "The server has not configured osu! OAuth credentials yet.",
-  INVALID_CREDENTIALS: "Provide both a valid osu! Client ID and Client Secret.",
+  INVALID_CREDENTIALS:
+    "Invalid API credentials. Check your osu! Client ID and Client Secret; select Show to inspect the secret.",
   SERVER_BUSY: "Too many searches are running. Please wait.",
   UPSTREAM_BUSY: "The service is waiting for osu! request capacity.",
 };

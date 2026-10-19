@@ -1,3 +1,1 @@
-Rarsu Score Checker: type an osu! username and see their top 20/50 plays. Works for all four modes, no login needed.
-
-Made by rarverse.
+Look up an osu! player’s best scores, explore pp, accuracy and star ratings, and save them as an image.

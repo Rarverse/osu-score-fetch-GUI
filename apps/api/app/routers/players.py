@@ -150,7 +150,6 @@ def player_scores(
                 state.fetch_lock.release()
         response.headers["X-Cache"] = cache_status
         response.headers["Cache-Control"] = "no-store"
-        logger.info("Score query cache=%s", cache_status)
         age = (datetime.now(UTC) - result.fetched_at).total_seconds()
         response.headers["X-Cache-TTL"] = str(
             max(0, min(settings.cache_timeout, int(settings.cache_timeout - age)))

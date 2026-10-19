@@ -7,6 +7,8 @@ import {
   Command,
   Download,
   ExternalLink,
+  Eye,
+  EyeOff,
   Keyboard,
   LoaderCircle,
   Search,
@@ -126,6 +128,7 @@ export default function App() {
   const [useOwnApi, setUseOwnApi] = useState(false);
   const [apiClientId, setApiClientId] = useState("");
   const [apiClientSecret, setApiClientSecret] = useState("");
+  const [showApiSecret, setShowApiSecret] = useState(false);
   const [limit, setLimit] = useState(20);
   const [mode, setMode] = useState<QueryMode>("auto");
   const [exporting, setExporting] = useState(false);
@@ -188,7 +191,7 @@ export default function App() {
       : undefined;
     if (
       credentials &&
-      (!/^\d+$/.test(credentials.clientId) || !credentials.clientSecret)
+      (!/^[1-9]\d*$/.test(credentials.clientId) || !credentials.clientSecret)
     ) {
       setError(t("invalidCredentials"));
       return;
@@ -225,11 +228,13 @@ export default function App() {
           if (attempt === 5) throw new Error(t("busyExhausted"));
           // Respect Retry-After, back off, and stagger clients to avoid retry bursts.
           const milliseconds =
-            Math.max(failure.retryAfter, 3 * 2 ** attempt) * 1000 +
+            Math.max(failure.retryAfter, Math.min(10, 3 * 2 ** attempt)) *
+              1000 +
             Math.random() * 2000;
           setWaiting({
             until: Date.now() + milliseconds,
             attempt: attempt + 1,
+            reason: failure.code,
           });
           await waitForRetry(milliseconds, controller.signal);
         }
@@ -321,7 +326,9 @@ export default function App() {
       </header>
       <main>
         <section className="hero" aria-labelledby="page-title">
-          <h1 id="page-title">{t("appName")}</h1>
+          <h1 id="page-title" className="sr-only">
+            {t("query")}
+          </h1>
           {customIntro.trim() && (
             <div className="hero-description custom-copy">
               <Markdown>{customIntro}</Markdown>
@@ -345,7 +352,12 @@ export default function App() {
                 required
               />
               <kbd>
-                <Command size={11} /> K
+                {/Mac|iPhone|iPad/.test(navigator.platform) ? (
+                  <Command size={11} />
+                ) : (
+                  "Ctrl"
+                )}{" "}
+                K
               </kbd>
             </div>
             <button
@@ -362,17 +374,6 @@ export default function App() {
               {!loading && <ChevronRight size={16} />}
             </button>
             <div className="search-options">
-              <div
-                className="mode-badge"
-                role="img"
-                aria-label={t("currentMode", { mode: selectedModeLabel })}
-              >
-                {mode === "auto" ? (
-                  <Circle size={14} />
-                ) : (
-                  <ModeIcon mode={mode} />
-                )}
-              </div>
               <fieldset className="mode-tabs">
                 <legend className="sr-only">{t("mode")}</legend>
                 <button
@@ -396,7 +397,7 @@ export default function App() {
                   </button>
                 ))}
               </fieldset>
-              <label className="sr-only" htmlFor="limit">
+              <label className="limit-label" htmlFor="limit">
                 {t("scoreLimit")}
               </label>
               <select
@@ -410,16 +411,27 @@ export default function App() {
               </select>
             </div>
           </form>
-          <details className="api-credentials">
-            <summary>{t("ownApi")}</summary>
+          <details
+            className="api-credentials"
+            onToggle={(event) => {
+              if (!event.currentTarget.open) setShowApiSecret(false);
+            }}
+          >
+            <summary>
+              <ChevronRight size={16} aria-hidden="true" />
+              {t("ownApi")}
+            </summary>
             <div className="api-credentials-content">
               <p>{t("ownApiDescription")}</p>
               <label className="api-credentials-toggle">
                 <input
                   type="checkbox"
                   checked={useOwnApi}
-                  onChange={(event) => setUseOwnApi(event.target.checked)}
-                  disabled={!secureContext}
+                  onChange={(event) => {
+                    setUseOwnApi(event.target.checked);
+                    setShowApiSecret(false);
+                  }}
+                  disabled={!secureContext || loading || exporting}
                 />
                 {t("ownApi")}
               </label>
@@ -430,19 +442,34 @@ export default function App() {
                   autoComplete="off"
                   value={apiClientId}
                   onChange={(event) => setApiClientId(event.target.value)}
-                  disabled={!useOwnApi}
+                  disabled={!useOwnApi || loading || exporting}
                 />
               </label>
-              <label>
-                {t("clientSecret")}
-                <input
-                  type="password"
-                  autoComplete="new-password"
-                  value={apiClientSecret}
-                  onChange={(event) => setApiClientSecret(event.target.value)}
-                  disabled={!useOwnApi}
-                />
-              </label>
+              <div className="secret-field">
+                <label htmlFor="api-client-secret">{t("clientSecret")}</label>
+                <div className="secret-input">
+                  <input
+                    id="api-client-secret"
+                    type={showApiSecret ? "text" : "password"}
+                    autoComplete="new-password"
+                    autoCapitalize="none"
+                    spellCheck={false}
+                    value={apiClientSecret}
+                    onChange={(event) => setApiClientSecret(event.target.value)}
+                    disabled={!useOwnApi || loading || exporting}
+                  />
+                  <button
+                    type="button"
+                    aria-controls="api-client-secret"
+                    aria-label={t(showApiSecret ? "hideSecret" : "showSecret")}
+                    onClick={() => setShowApiSecret((visible) => !visible)}
+                    disabled={!useOwnApi}
+                  >
+                    {showApiSecret ? <EyeOff size={17} /> : <Eye size={17} />}
+                    {t(showApiSecret ? "hide" : "show")}
+                  </button>
+                </div>
+              </div>
               <p className="api-credentials-note">{t("credentialsInMemory")}</p>
               {!secureContext && (
                 <p className="api-credentials-note">{t("httpsRequired")}</p>
@@ -656,15 +683,18 @@ export default function App() {
         {!result && !loading && !error && (
           <section className="start-panel" aria-label={t("instructions")}>
             <Search size={28} aria-hidden="true" />
-            <h2>{t("startTitle")}</h2>
-            <p>{t("startDescription")}</p>
+            <h2>{t("instructions")}</h2>
+            <ol className="usage-steps">
+              <li>{t("startTitle")}</li>
+              <li>{t("startDescription")}</li>
+              <li>{t("downloadInstructions")}</li>
+            </ol>
           </section>
         )}
         <div className="feature-strip">
           <div>
             <Trophy size={17} />
             <span>{t("bestPerformance")}</span>
-            <small>Best performance</small>
           </div>
           <div>
             <Star size={17} />
@@ -680,7 +710,15 @@ export default function App() {
       </main>
       <footer>
         <div>
-          <span className="footer-brand">rarverse</span>
+          <span>made by</span>
+          <a
+            className="footer-brand"
+            href="https://rarverse.com"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Rarverse
+          </a>
         </div>
         <p>{t("unofficial")}</p>
         <a

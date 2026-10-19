@@ -1,3 +1,4 @@
+import logging
 import time
 from datetime import UTC, datetime
 
@@ -8,6 +9,8 @@ from requests.adapters import HTTPAdapter
 from app.config import Settings
 from app.schemas.scores import Player, Ruleset, Score, ScoresResponse
 from app.services.rate_limit import UpstreamBusy, UpstreamLimiter
+
+logger = logging.getLogger(__name__)
 
 
 class ServiceError(Exception):
@@ -26,7 +29,32 @@ class TimeoutAdapter(HTTPAdapter):
     def send(self, request, **kwargs):
         self.limiter.acquire()
         kwargs["timeout"] = (5, 20)
-        response = super().send(request, **kwargs)
+        phase = "oauth" if request.url.split("?", 1)[0].endswith("/oauth/token") else "scores"
+        started = time.perf_counter()
+        try:
+            response = super().send(request, **kwargs)
+        except requests.RequestException as error:
+            logger.warning(
+                "osu_http_failed",
+                extra={
+                    "fields": {
+                        "phase": phase,
+                        "error_type": type(error).__name__,
+                    }
+                },
+            )
+            raise
+        logger.log(
+            logging.WARNING if response.status_code >= 400 else logging.INFO,
+            "osu_http_completed",
+            extra={
+                "fields": {
+                    "phase": phase,
+                    "status": response.status_code,
+                    "duration_ms": round((time.perf_counter() - started) * 1000, 1),
+                }
+            },
+        )
         if response.status_code == 429:
             retry_after = self.limiter.defer(response.headers.get("Retry-After"))
             response.close()
@@ -164,6 +192,15 @@ class OsuClient:
             ) from None
         except requests.HTTPError as error:
             if (
+                client_id is not None
+                and api is None
+                and error.response is not None
+                and error.response.status_code in (400, 401)
+            ):
+                raise ServiceError(
+                    422, "INVALID_CREDENTIALS", "osu! 拒绝了这组 API 凭据，请核对后重试。"
+                ) from None
+            if (
                 error.response is not None
                 and error.response.status_code == 401
                 and api is not None
@@ -177,7 +214,8 @@ class OsuClient:
             ) from None
         except ServiceError:
             raise
-        except Exception:
+        except Exception as error:
+            logger.error("osu_query_failed", extra={"fields": {"error_type": type(error).__name__}})
             # Keep tokens, raw upstream bodies and exception details out of responses/logs.
             raise ServiceError(
                 502, "UPSTREAM_ERROR", "osu! 服务暂时无法访问，请稍后重试。"

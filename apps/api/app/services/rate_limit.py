@@ -1,9 +1,12 @@
+import logging
 import math
 import time
 from collections import deque
 from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
 from threading import Lock
+
+logger = logging.getLogger(__name__)
 
 
 class RateLimiter:
@@ -27,7 +30,17 @@ class RateLimiter:
             for key, limit in limits:
                 bucket = self.buckets.get(key)
                 if bucket and len(bucket) >= limit:
-                    return max(1, math.ceil(self.window - (now - bucket[0])))
+                    retry_after = max(1, math.ceil(self.window - (now - bucket[0])))
+                    logger.warning(
+                        "local_rate_limited",
+                        extra={
+                            "fields": {
+                                "scope": key.split(":", 1)[0],
+                                "retry_after": retry_after,
+                            }
+                        },
+                    )
+                    return retry_after
             for key, _ in limits:
                 self.buckets.setdefault(key, deque()).append(now)
         return None
@@ -41,7 +54,8 @@ class UpstreamBusy(Exception):
 class UpstreamLimiter:
     """One budget for OAuth and API HTTP requests, paced without bursts."""
 
-    def __init__(self, per_minute: int):
+    def __init__(self, per_minute: int, budget: str = "api"):
+        self.budget = budget
         self.limit = per_minute
         self.interval = 60 / per_minute
         self.requests: deque[float] = deque()
@@ -62,33 +76,74 @@ class UpstreamLimiter:
         with self.lock:
             delay = self._delay(time.monotonic(), needed)
             if delay > 0:
-                raise UpstreamBusy(max(1, math.ceil(delay)))
+                retry_after = max(1, math.ceil(delay))
+                logger.warning(
+                    "upstream_wait",
+                    extra={
+                        "fields": {
+                            "budget": self.budget,
+                            "retry_after": retry_after,
+                            "reason": "upstream_cooldown"
+                            if self.cooldown_until > time.monotonic()
+                            else "budget_exhausted",
+                        }
+                    },
+                )
+                raise UpstreamBusy(retry_after)
 
     def acquire(self) -> None:
         with self.lock:
             now = time.monotonic()
             delay = self._delay(now, 1)
             if delay > 0:
-                raise UpstreamBusy(max(1, math.ceil(delay)))
+                retry_after = max(1, math.ceil(delay))
+                logger.warning(
+                    "upstream_wait",
+                    extra={
+                        "fields": {
+                            "budget": self.budget,
+                            "retry_after": retry_after,
+                            "reason": "upstream_cooldown"
+                            if self.cooldown_until > time.monotonic()
+                            else "budget_exhausted",
+                        }
+                    },
+                )
+                raise UpstreamBusy(retry_after)
             if self.requests:
                 time.sleep(max(0, self.requests[-1] + self.interval - now))
             self.requests.append(time.monotonic())
 
     def defer(self, retry_after: str | None) -> int:
         seconds = 60.0
+        fallback = True
         if retry_after:
             try:
                 seconds = float(retry_after)
+                fallback = False
             except ValueError:
                 try:
                     seconds = (
                         parsedate_to_datetime(retry_after) - datetime.now(UTC)
                     ).total_seconds()
+                    fallback = False
                 except (ValueError, TypeError, OverflowError):
                     pass
         if not math.isfinite(seconds) or seconds <= 0:
             seconds = 60.0
+            fallback = True
         seconds = math.ceil(seconds)
         with self.lock:
             self.cooldown_until = max(self.cooldown_until, time.monotonic() + seconds)
-            return max(1, math.ceil(self.cooldown_until - time.monotonic()))
+            remaining = max(1, math.ceil(self.cooldown_until - time.monotonic()))
+            logger.warning(
+                "upstream_rate_limited",
+                extra={
+                    "fields": {
+                        "budget": self.budget,
+                        "retry_after": remaining,
+                        "fallback": fallback,
+                    }
+                },
+            )
+            return remaining

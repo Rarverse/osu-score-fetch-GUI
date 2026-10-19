@@ -34,6 +34,11 @@ services:
       - backend
     volumes:
       - osu-data:/var/lib/osu-score-api
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     restart: unless-stopped
 
   web:
@@ -53,6 +58,11 @@ services:
     depends_on:
       api:
         condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     restart: unless-stopped
 
 networks:

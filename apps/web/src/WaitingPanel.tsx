@@ -5,6 +5,7 @@ import { t } from "./i18n";
 export interface WaitingState {
   until: number;
   attempt: number;
+  reason: string;
 }
 
 export default function WaitingPanel({
@@ -25,7 +26,13 @@ export default function WaitingPanel({
     <section className="waiting-panel" aria-labelledby="waiting-title">
       <Clock3 size={32} aria-hidden="true" />
       <h2 id="waiting-title">{t("busyTitle")}</h2>
-      <p>{t("busyDescription")}</p>
+      <p>
+        {t(
+          waiting.reason === "UPSTREAM_BUSY"
+            ? "upstreamBusyDescription"
+            : "busyDescription",
+        )}
+      </p>
       <p className="waiting-countdown">
         {seconds > 0 ? t("retryCountdown", { seconds }) : t("retryNow")}
         <span>{t("retryAttempt", { attempt: waiting.attempt })}</span>

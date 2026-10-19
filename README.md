@@ -135,7 +135,7 @@ npm run dev
 | `RATE_LIMIT_WINDOW` | `60` | 本地限流窗口，单位秒 |
 | `RATE_LIMIT_PER_IP` | `20` | 每个 IP 在窗口内允许的查询次数 |
 | `RATE_LIMIT_PER_PLAYER` | `10` | 每个规范化玩家输入在窗口内允许的查询次数 |
-| `OSU_REQUESTS_PER_MINUTE` | `60` | 全站上游 HTTP 请求预算，可设为 3–60 |
+| `OSU_REQUESTS_PER_MINUTE` | `60` | API 与图片各自的请求预算，可设为 3–60 |
 | `CORS_ORIGINS` | localhost 与 127.0.0.1 的 5173 端口 | 允许来源，使用 JSON 字符串数组 |
 | `FORWARDED_ALLOW_IPS` | `127.0.0.1` | API 信任的代理 IP / CIDR，逗号分隔 |
 
@@ -213,9 +213,41 @@ GET /api/v1/players/{username}/scores?type=best&limit=20&mode=mania
 
 图片导出通过同源 `/api/v1/images?url=…` 读取服务端缓存，不依赖图片站点的 CORS 支持。服务端在 `CACHE_PATH/images` 中缓存图片 24 小时，浏览器按剩余有效期缓存；磁盘文件沿用 `CACHE_RETENTION` 保留策略（至少 24 小时）。后台预缓存和导出请求共用缓存及并发锁，避免重复回源；导出会合并重复曲绘，最多同时加载两张素材。仅允许 osu! 官方头像与曲绘地址，不跟随重定向，单张图片上限 5 MiB。图片请求排队最多等待 75 秒，繁忙或加载失败会提示重试下载。
 
-所有成绩查询，包括缓存命中，都受 IP 与玩家输入限流。上游 OAuth、玩家详情、成绩和未缓存图片请求共用请求预算，默认最多 60 次/分钟、至少间隔 1 秒；失败请求也计入。该预算遵循 [osu! API 使用要求](https://osu.ppy.sh/docs/#terms-of-use)，并保守地覆盖图片 CDN 请求。成绩缓存未命中通常需要 2 次上游请求，获取 token 时需要 3 次；图片缓存命中不占用上游预算。上游返回 429 后，服务遵守 `Retry-After` 进入冷却，图片请求排队等待，不进行快速重试。
+所有成绩查询，包括缓存命中，都受 IP 与玩家输入限流。上游 OAuth、玩家详情和成绩共用 API 请求预算，默认最多 60 次/分钟、至少间隔 1 秒；失败请求也计入。该预算遵循 [osu! API 使用要求](https://osu.ppy.sh/docs/#terms-of-use)。图片 CDN 使用独立的同等限速预算，避免头像、曲绘预加载及图片 429 冷却阻塞查分。成绩缓存未命中通常需要 2 次上游请求，获取 token 时需要 3 次；图片缓存命中不占用上游预算。上游返回 429 后，对应的 API 或图片预算遵守 `Retry-After` 进入冷却，图片请求排队等待，不进行快速重试。
+
+60 秒缓存复用不是搜索冷却：可以立即查询其他玩家。使用自己的 API 凭据仍受站点 IP / 玩家限流和 API 总预算约束；密钥错误会提示核对凭据，前端支持显示 / 隐藏 Client Secret。服务繁忙时自动退避最多 10 秒，另加最多 2 秒随机错峰；若上游要求更长的 `Retry-After`，仍遵守该时间。
 
 **必须以单 worker、单副本运行**：全站请求预算、并发锁和统计锁均位于进程内。上游查询串行执行，繁忙时立即返回 503；浏览器保留输入并重试，服务端不建立排队任务。取消浏览器查询不能撤销已经发出的上游请求。扩容前需要实现共享限流和锁，OAuth 凭据也应由本服务独占使用。
+
+## 查看后台日志
+
+应用日志直接输出到容器标准错误流，Docker 和 Portainer 均可查看，无需开启额外接口。在仓库根目录执行：
+
+```sh
+# 实时查看 API 日志，先显示最近 200 行
+docker compose logs -f --tail=200 api
+
+# 查看最近 10 分钟的 API 和 Nginx 日志
+docker compose logs --since=10m api web
+```
+
+使用 Portainer 时，进入 **Containers → API 容器 → Logs**，打开自动刷新。镜像部署在 `deploy` 目录运行同样的命令，或加上 `-f deploy/compose.yaml --env-file deploy/.env.deploy`。
+
+API 每行输出一条 JSON，含 UTC 时间、级别和事件名。`request_completed` 记录请求编号 `request_id`、路由模板、HTTP 状态、耗时、缓存状态、凭据来源（`site` / `custom`）、错误码与等待秒数。响应头 `X-Request-ID` 可在浏览器开发者工具 **Network → 请求 → Headers** 中找到，用它在日志里关联同一次查询。健康检查成功时不写请求日志。
+
+遇到等待或失败时，关注以下字段：
+
+| 事件 / 字段 | 含义 |
+| --- | --- |
+| `local_rate_limited` / `scope` | 站点 IP 或玩家限流，`retry_after` 是剩余秒数 |
+| `upstream_wait` / `reason=budget_exhausted` | 本服务的上游请求预算已耗尽 |
+| `upstream_wait` / `reason=upstream_cooldown` | 正在遵守上游 429 冷却 |
+| `upstream_rate_limited` / `budget` | osu! API 或图片返回 429，`api` 与 `images` 分别计数 |
+| `upstream_rate_limited` / `fallback=true` | 上游未给出有效 `Retry-After`，保守等待 60 秒 |
+| `osu_http_completed` / `phase`、`status` | OAuth / 查分上游 HTTP 状态，例如 OAuth 401 表示凭据被拒绝 |
+| `request_failed` / `error_type` | 未预期的服务异常类型 |
+
+日志不记录用户名、玩家 ID、IP、访客标识、Client ID、密钥、token、原始 URL、查询参数或上游响应正文。Nginx 与 Uvicorn 的原始访问日志继续关闭，避免将查询路径中的玩家信息写入日志。Compose 对每个容器启用日志轮转，最多保留 3 个、每个 10 MB 的日志文件；重建容器后旧日志不保证保留。
 
 ## 项目结构与检查
 
