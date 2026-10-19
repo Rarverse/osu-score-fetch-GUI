@@ -10,12 +10,42 @@
   -webkit-font-smoothing: antialiased;
   font-weight: 400;
   color-scheme: dark;
+  scrollbar-width: none;
 }
 * {
   box-sizing: border-box;
 }
+:root::-webkit-scrollbar {
+  display: none;
+}
 body {
   margin: 0;
+  padding-right: 12px;
+}
+.page-scrollbar {
+  position: fixed;
+  inset: 0 0 0 auto;
+  z-index: 100;
+  width: 12px;
+  background: #1c1728;
+  touch-action: none;
+  user-select: none;
+  cursor: pointer;
+}
+.page-scrollbar:focus-visible {
+  outline: 2px solid #e1d3ff;
+  outline-offset: -2px;
+}
+.page-scrollbar-thumb {
+  position: absolute;
+  left: 3px;
+  width: 6px;
+  border-radius: 6px;
+  background: #b99aef;
+}
+.page-scrollbar:hover .page-scrollbar-thumb,
+.page-scrollbar:focus-visible .page-scrollbar-thumb {
+  background: #d9caff;
 }
 button,
 input,
@@ -247,7 +277,7 @@ main {
   color: #e9e8ed;
 }
 .custom-copy {
-  max-width: 690px;
+  max-width: 960px;
   margin: 0 auto;
   overflow-wrap: anywhere;
 }
@@ -321,8 +351,14 @@ main {
 .api-credentials summary::-webkit-details-marker {
   display: none;
 }
+.api-credentials summary > svg {
+  transition: transform 220ms ease;
+}
 .api-credentials[open] summary > svg {
   transform: rotate(90deg);
+}
+.api-credentials[open] .api-credentials-content {
+  animation: panel-appear 240ms ease-out both;
 }
 .api-credentials-content {
   display: grid;
@@ -1056,7 +1092,33 @@ footer a:hover {
     font-size: 12px;
   }
 }
+.results {
+  animation: panel-appear 320ms ease-out both;
+}
+@keyframes panel-appear {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (min-width: 900px) {
+  .hero-description {
+    white-space: nowrap;
+    letter-spacing: 0;
+  }
+}
 @media (prefers-reduced-motion: reduce) {
+  .api-credentials[open] .api-credentials-content,
+  .results {
+    animation: none;
+  }
+  .api-credentials summary > svg {
+    transition: none;
+  }
   .spin {
     animation: none;
   }

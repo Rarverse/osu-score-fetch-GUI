@@ -23,6 +23,7 @@ import introEn from "./content/intro.en.md?raw";
 import intro from "./content/intro.md?raw";
 import { language, locale, t } from "./i18n";
 import ModeIcon from "./ModeIcon";
+import PageScrollbar from "./PageScrollbar";
 import {
   gradeLabel,
   gradeTitle,
@@ -730,6 +731,7 @@ export default function App() {
           <ExternalLink size={12} />
         </a>
       </footer>
+      <PageScrollbar />
     </div>
   );
 }

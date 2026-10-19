@@ -1,6 +1,7 @@
 const zh = {
   appName: "Rarsu查分器",
   home: "Rarsu查分器首页",
+  pageScroll: "页面滚动条",
   description:
     "Rarsu查分器：输入 osu! 用户名，直接看 TA 的 Top 20/50 成绩。四个模式都能查，不用登录。",
   visitOsu: "访问 osu!",
@@ -98,6 +99,7 @@ type MessageKey = keyof typeof zh;
 const en: Record<MessageKey, string> = {
   appName: "Rarsu Score Checker",
   home: "Rarsu Score Checker home",
+  pageScroll: "Page scrollbar",
   description:
     "Rarsu Score Checker: type an osu! username and see their top 20/50 plays. Works for all four modes, no login needed.",
   visitOsu: "Visit osu!",
