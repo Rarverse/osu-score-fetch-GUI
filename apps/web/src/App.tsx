@@ -20,8 +20,13 @@ import { type ExportProgress, renderBestScores, saveBestScores } from "./b50";
 import introEn from "./content/intro.en.md?raw";
 import intro from "./content/intro.md?raw";
 import { language, locale, t } from "./i18n";
-import { imageUrl } from "./images";
 import ModeIcon from "./ModeIcon";
+import {
+  gradeLabel,
+  gradeTitle,
+  starBackground,
+  starColor,
+} from "./score-style";
 import {
   modeLabels,
   type QueryMode,
@@ -47,7 +52,7 @@ function ScoreRow({ score, position }: { score: Score; position: number }) {
         className="map-cover"
         style={
           score.cover_url
-            ? { backgroundImage: `url(${imageUrl(score.cover_url)})` }
+            ? { backgroundImage: `url(${score.cover_url})` }
             : undefined
         }
       >
@@ -71,7 +76,14 @@ function ScoreRow({ score, position }: { score: Score; position: number }) {
           {score.artist} <span>·</span> {score.version}
         </p>
         <div className="map-tags">
-          <span className="difficulty" title={t("srTitle")}>
+          <span
+            className="difficulty"
+            title={t("srTitle")}
+            style={{
+              color: starColor(score.star_rating),
+              backgroundColor: starBackground(score.star_rating),
+            }}
+          >
             <Star size={11} fill="currentColor" />
             {number(score.star_rating, 2)}
           </span>
@@ -86,7 +98,14 @@ function ScoreRow({ score, position }: { score: Score; position: number }) {
           )}
         </div>
       </div>
-      <span className={`grade grade-${score.rank}`}>{score.rank}</span>
+      <span
+        className={`grade grade-${score.rank}`}
+        role="img"
+        title={gradeTitle(score.rank)}
+        aria-label={gradeTitle(score.rank)}
+      >
+        {gradeLabel(score.rank)}
+      </span>
       <div className="accuracy">
         <strong>
           {number(score.accuracy * 100, 2)}
@@ -478,7 +497,7 @@ export default function App() {
               <div className="player-identity">
                 {result.player.avatar_url ? (
                   <img
-                    src={imageUrl(result.player.avatar_url)}
+                    src={result.player.avatar_url}
                     alt=""
                     className="avatar"
                   />

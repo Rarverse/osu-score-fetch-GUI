@@ -27,8 +27,15 @@ function loadRenderer({ failImages = false } = {}) {
     fillStyle: "",
     font: "",
     measureText: (value) => ({ width: value.length * 8 }),
-    fillText(value) {
-      labels.push({ value, color: this.fillStyle });
+    fillText(value, x, y) {
+      labels.push({
+        value,
+        color: this.fillStyle,
+        x,
+        y,
+        baseline: this.textBaseline,
+        align: this.textAlign,
+      });
     },
     drawImage: (...args) => drawings.push(args),
   };
@@ -53,12 +60,19 @@ function loadRenderer({ failImages = false } = {}) {
     module: imageModule,
     exports: imageModule.exports,
   });
+  const styleModule = { exports: {} };
+  runInNewContext(compile("score-style"), {
+    module: styleModule,
+    exports: styleModule.exports,
+    require: () => ({ t: (key) => key }),
+  });
   const renderer = { exports: {} };
   runInNewContext(compile("b50"), {
     module: renderer,
     exports: renderer.exports,
     require: (name) => {
       if (name === "./images") return imageModule.exports;
+      if (name === "./score-style") return styleModule.exports;
       if (name === "./types") return { modeLabels: { mania: "osu!mania" } };
       if (name === "./i18n") return { locale: "en-US", t: (key) => key };
       throw new Error(`Unexpected module: ${name}`);
@@ -163,10 +177,51 @@ test("rank grades use distinct colors, including silver hidden grades", async ()
   const color = (rank) =>
     renderer.labels.find(({ value }) => value === rank).color;
   assert.equal(color("SS"), color("S"));
-  assert.equal(color("SSH"), color("SH"));
   assert.equal(
-    new Set(["S", "SH", "A", "B", "C", "D", "F"].map(color)).size,
+    renderer.labels.some(({ value }) => ["SH", "SSH"].includes(value)),
+    false,
+  );
+  const silverSS = renderer.labels.filter(({ value }) => value === "SS")[1];
+  const silverS = renderer.labels.filter(({ value }) => value === "S")[1];
+  assert.equal(silverSS.color, "#d2dfe6");
+  assert.equal(silverS.color, silverSS.color);
+  assert.equal(
+    new Set([silverS.color, ...["S", "A", "B", "C", "D", "F"].map(color)]).size,
     7,
+  );
+});
+
+test("brand and BEST label share the same vertical centre with balanced margins", async () => {
+  const renderer = loadRenderer();
+  await renderer.renderBestScores(fixture(1), 20);
+  const brand = renderer.labels.find(
+    ({ value }) => value === "RARVERSE  /  RARSU",
+  );
+  const best = renderer.labels.find(({ value }) => value === "BEST 20");
+  assert.equal(brand.y, best.y);
+  assert.equal(brand.baseline, "middle");
+  assert.equal(best.baseline, "middle");
+  assert.equal(best.align, "right");
+  assert.equal(best.x, renderer.canvas.width - brand.x);
+});
+
+test("stars follow official colours while mod labels keep their own colour", async () => {
+  const renderer = loadRenderer();
+  const data = fixture(3);
+  data.scores.forEach((score, index) => {
+    score.star_rating = [2, 4.9, 9][index];
+    score.mods = ["HD"];
+  });
+  await renderer.renderBestScores(data, 20);
+  const stars = renderer.labels.filter(({ value }) => value.endsWith("★"));
+  assert.deepEqual(
+    stars.map(({ color }) => color),
+    ["#4fffd5", "#ff4e6f", "#f6f05c"],
+  );
+  assert.ok(
+    renderer.labels
+      .filter(({ value }) => value === "HD")
+      .every(({ color }) => color === "#c9b2ff"),
   );
 });
 

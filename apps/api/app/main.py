@@ -1,5 +1,7 @@
+import asyncio
 import logging
 from asyncio import Lock as AsyncLock
+from contextlib import asynccontextmanager, suppress
 from threading import Lock
 
 from fastapi import FastAPI, Request
@@ -8,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.config import Settings
-from app.routers.images import IMAGE_TTL
+from app.routers.images import IMAGE_TTL, warm_images
 from app.routers.images import router as images_router
 from app.routers.players import router
 from app.services.cache import JsonCache
@@ -17,9 +19,20 @@ from app.services.rate_limit import RateLimiter
 from app.services.usage import UsageStats
 
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    warmer = asyncio.create_task(warm_images(app.state))
+    try:
+        yield
+    finally:
+        warmer.cancel()
+        with suppress(asyncio.CancelledError):
+            await warmer
+
+
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or Settings()
-    app = FastAPI(title="Rarsu查分器 API", version="1.0.0")
+    app = FastAPI(title="Rarsu查分器 API", version="1.0.0", lifespan=lifespan)
     app.state.settings = settings
     app.state.cache = JsonCache(
         settings.cache_path, settings.cache_timeout, settings.cache_retention
@@ -33,6 +46,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         settings.cache_path / "images", IMAGE_TTL, max(IMAGE_TTL, settings.cache_retention)
     )
     app.state.image_lock = AsyncLock()
+    app.state.image_queue = asyncio.Queue(maxsize=256)
+    app.state.image_pending = set()
     app.state.stats = UsageStats(settings.stats_path)
     app.state.osu = OsuClient(settings)
     app.state.limiter = RateLimiter(settings.rate_limit_window)

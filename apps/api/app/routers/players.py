@@ -2,10 +2,11 @@ import logging
 from datetime import UTC, datetime
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Header, Query, Request, Response
+from fastapi import APIRouter, BackgroundTasks, Header, Query, Request, Response
 from pydantic import ValidationError
 
 from app.client_ip import client_ip
+from app.routers.images import enqueue_images
 from app.schemas.scores import ErrorResponse, Ruleset, ScoresResponse
 from app.services.cache import normalize_player, not_found_cache_key, score_cache_key
 from app.services.osu_client import ServiceError
@@ -49,6 +50,7 @@ def player_scores(
     username: str,
     request: Request,
     response: Response,
+    background_tasks: BackgroundTasks,
     type: Literal["best"] = "best",
     limit: Annotated[int, Query(ge=1, le=50)] = 20,
     mode: Ruleset | None = None,
@@ -155,7 +157,16 @@ def player_scores(
         )
         player_id = str(result.player.user_id)
         resolved_mode = result.mode
-        return result.model_copy(update={"scores": result.scores[:limit]})
+        selected = result.model_copy(update={"scores": result.scores[:limit]})
+        background_tasks.add_task(
+            enqueue_images,
+            state,
+            [
+                selected.player.avatar_url,
+                *(score.cover_url for score in selected.scores if score.cover_url),
+            ],
+        )
+        return selected
     finally:
         try:
             state.stats.record(

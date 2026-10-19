@@ -1,5 +1,6 @@
 import { locale, t } from "./i18n";
 import { imageUrl } from "./images";
+import { gradeLabel, starBackground, starColor } from "./score-style";
 import { modeLabels, type ScoresResponse } from "./types";
 
 const rankColors: Record<string, string> = {
@@ -144,8 +145,13 @@ export async function renderBestScores(
 
   ctx.fillStyle = "#101116";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-  text("RARVERSE  /  RARSU", 40, 48, 20, "#c9b2ff");
-  text(`BEST ${limit}`, 1350, 52, 34, "#c9b2ff");
+  // Centre both labels on the same header row, regardless of their font sizes.
+  ctx.textBaseline = "middle";
+  text("RARVERSE  /  RARSU", 40, 38, 20, "#c9b2ff");
+  ctx.textAlign = "right";
+  text(`BEST ${limit}`, canvas.width - 40, 38, 34, "#c9b2ff");
+  ctx.textAlign = "left";
+  ctx.textBaseline = "alphabetic";
   artwork(images[0], 40, 80, 112);
   text(data.player.username, 180, 120, 36, "#f1eff7", 1130);
   text(
@@ -181,13 +187,24 @@ export async function renderBestScores(
       "#a49bb4",
       460,
     );
+    const stars = `${number(score.star_rating)}★`;
+    ctx.font = "600 16px system-ui, sans-serif";
+    const starWidth = ctx.measureText(stars).width;
+    const background = starBackground(score.star_rating);
+    if (background) {
+      ctx.fillStyle = background;
+      ctx.beginPath();
+      ctx.roundRect(x + 116, y + 65, starWidth + 8, 22, 4);
+      ctx.fill();
+    }
+    text(stars, x + 120, y + 81, 16, starColor(score.star_rating));
     text(
-      `${number(score.star_rating)}★  ${score.mods.join(" ") || "NM"}`,
-      x + 120,
+      score.mods.join(" ") || "NM",
+      x + 130 + starWidth,
       y + 81,
       16,
       "#c9b2ff",
-      460,
+      450 - starWidth,
     );
     text(
       `${number(score.accuracy * 100)}%  ·  ${number(score.max_combo, 0)}× combo`,
@@ -198,7 +215,7 @@ export async function renderBestScores(
       460,
     );
     text(
-      score.rank,
+      gradeLabel(score.rank),
       x + 600,
       y + 38,
       22,

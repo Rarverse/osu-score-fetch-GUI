@@ -246,3 +246,113 @@ def test_image_429_respects_retry_after_before_retrying(tmp_path, monkeypatch, p
     assert response.content == PNG
     assert times == [0, 12]
     assert paced_clock["waits"] == [12]
+
+
+def sample_scores():
+    from datetime import UTC, datetime
+
+    from app.schemas.scores import Player, Score, ScoresResponse
+
+    return ScoresResponse(
+        player=Player(
+            user_id=2,
+            username="Player",
+            country="JP",
+            avatar_url=AVATAR,
+            pp=100,
+            global_rank=10,
+            hit_accuracy=99,
+        ),
+        scores=[
+            Score(
+                score_id=index,
+                beatmap_id=index,
+                beatmap_title="Song",
+                artist="Artist",
+                version="Hard",
+                cover_url=f"https://assets.ppy.sh/beatmaps/{index}/covers/list@2x.jpg",
+                star_rating=4.2,
+                accuracy=0.99,
+                pp=100,
+                rank="S",
+                mods=[],
+                max_combo=100,
+                played_at=None,
+            )
+            for index in [1, 2]
+        ],
+        fetched_at=datetime.now(UTC),
+    )
+
+
+def test_score_response_queues_only_selected_artwork_and_deduplicates(tmp_path, monkeypatch):
+    get = upstream(monkeypatch)
+    app = make_app(tmp_path)
+    app.state.osu.get_user_scores = lambda *_args: sample_scores()
+    client = TestClient(app)
+    for _ in range(2):
+        response = client.get("/api/v1/players/Player/scores?limit=1")
+        assert response.status_code == 200
+    assert app.state.image_queue.qsize() == 2
+    assert app.state.image_pending == {AVATAR, COVER}
+    get.assert_not_called()  # Enqueuing does not wait on image HTTP requests.
+
+
+def test_background_warming_does_not_delay_scores_and_exports_reuse_it(tmp_path, monkeypatch):
+    from threading import Event
+
+    get = upstream(monkeypatch)
+    response = get.return_value
+    started, release = Event(), Event()
+
+    def blocked_get(*args, **kwargs):
+        started.set()
+        assert release.wait(3), "Score response waited for background images"
+        return response
+
+    get.side_effect = blocked_get
+    app = make_app(tmp_path)
+    app.state.osu.get_user_scores = lambda *_args: sample_scores()
+    with TestClient(app) as client:
+        result = client.get("/api/v1/players/Player/scores?limit=1")
+        assert result.status_code == 200
+        assert started.wait(1)
+        release.set()
+        client.portal.call(app.state.image_queue.join)
+        assert get.call_count == 2
+        assert app.state.image_pending == set()
+        for url in [AVATAR, COVER]:
+            assert client.get("/api/v1/images", params={"url": url}).headers["x-cache"] == "HIT"
+        client.get("/api/v1/players/Player/scores?limit=1")
+        client.portal.call(app.state.image_queue.join)
+        assert get.call_count == 2  # Query hits and downloads do not fetch artwork again.
+
+
+def test_background_worker_continues_after_unavailable_avatar(tmp_path, monkeypatch):
+    get = upstream(monkeypatch)
+    response = get.return_value
+    missing = MagicMock()
+    missing.status_code = 404
+    missing.headers = {}
+    missing.__enter__.return_value = missing
+    get.side_effect = lambda url, **_kwargs: missing if url == AVATAR else response
+    app = make_app(tmp_path)
+    app.state.osu.get_user_scores = lambda *_args: sample_scores()
+    with TestClient(app) as client:
+        assert client.get("/api/v1/players/Player/scores?limit=1").status_code == 200
+        client.portal.call(app.state.image_queue.join)
+        assert client.get("/api/v1/images", params={"url": COVER}).headers["x-cache"] == "HIT"
+        assert app.state.image_pending == set()
+        assert get.call_count == 2
+
+
+def test_background_queue_is_bounded_and_skips_invalid_urls(tmp_path):
+    import asyncio
+
+    from app.routers.images import enqueue_images
+
+    app = make_app(tmp_path)
+    urls = ["https://evil.test/private", "", *(f"https://a.ppy.sh/{index}" for index in range(300))]
+    asyncio.run(enqueue_images(app.state, urls))
+    assert app.state.image_queue.qsize() == 256
+    assert len(app.state.image_pending) == 256

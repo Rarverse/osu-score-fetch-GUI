@@ -702,6 +702,8 @@ footer a:hover {
   gap: 4px;
   font-size: 9px;
   color: #dfc48b;
+  border-radius: 3px;
+  padding: 2px 4px;
 }
 .mod {
   font-size: 9px;

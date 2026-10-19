@@ -85,7 +85,10 @@ def fetch_image(url: str, limiter: UpstreamLimiter) -> tuple[bytes, str]:
 async def image(request: Request, url: str = Query(max_length=2048)):
     # A fixed host/path allowlist and disabled redirects prevent an open proxy.
     validate_image_url(url)
-    state = request.app.state
+    return await get_image(request.app.state, url)
+
+
+async def get_image(state, url: str) -> Response:
     key = hashlib.sha256(url.encode()).hexdigest()
     cached = cached_image(state.images, key)
     if cached is not None:
@@ -124,3 +127,33 @@ async def image(request: Request, url: str = Query(max_length=2048)):
             "X-Cache": "MISS",
         },
     )
+
+
+async def enqueue_images(state, urls: list[str]) -> None:
+    # Called after the score response is sent. The bounded queue deduplicates
+    # page visits while the existing image lock also covers concurrent exports.
+    for url in dict.fromkeys(urls):
+        if not url or url in state.image_pending:
+            continue
+        try:
+            validate_image_url(url)
+            state.image_queue.put_nowait(url)
+        except ServiceError:
+            continue
+        except asyncio.QueueFull:
+            break
+        state.image_pending.add(url)
+
+
+async def warm_images(state) -> None:
+    while True:
+        url = await state.image_queue.get()
+        try:
+            await get_image(state, url)
+        except ServiceError:
+            logger.info("Background artwork caching skipped an unavailable image")
+        except OSError:
+            logger.warning("Background artwork cache unavailable")
+        finally:
+            state.image_pending.discard(url)
+            state.image_queue.task_done()
