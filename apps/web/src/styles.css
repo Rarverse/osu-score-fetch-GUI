@@ -1134,6 +1134,7 @@ footer a:hover {
 }
 @media (min-width: 900px) {
   .hero-description {
+    font-size: 17px;
     white-space: nowrap;
     letter-spacing: 0;
   }
