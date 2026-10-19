@@ -48,11 +48,18 @@ def test_cache_retention_cleans_old_files_on_activity(tmp_path, monkeypatch):
     assert not path.exists()
 
 
-def test_query_refreshes_after_60_seconds_and_cached_queries_bypass_busy_lock(
+def test_query_reuses_three_minutes_then_refreshes_and_cached_queries_bypass_busy_lock(
     tmp_path, monkeypatch
 ):
     clock = {"now": 100.0}
     monkeypatch.setattr("app.services.cache.time.time", lambda: clock["now"])
+
+    class ClockDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return datetime.fromtimestamp(clock["now"], tz or UTC)
+
+    monkeypatch.setattr("app.routers.players.datetime", ClockDateTime)
     app = create_app(Settings(_env_file=None, cache_path=tmp_path))
     calls = []
 
@@ -70,7 +77,7 @@ def test_query_refreshes_after_60_seconds_and_cached_queries_bypass_busy_lock(
                 hit_accuracy=99,
             ),
             scores=[],
-            fetched_at=datetime.now(UTC),
+            fetched_at=datetime.fromtimestamp(clock["now"], UTC),
         )
 
     app.state.osu.get_user_scores = fetch
@@ -82,10 +89,19 @@ def test_query_refreshes_after_60_seconds_and_cached_queries_bypass_busy_lock(
         cached = client.get(url + "?limit=50")
         assert cached.status_code == 200
         assert cached.headers["X-Cache"] == "HIT"
-        assert 0 <= int(cached.headers["X-Cache-TTL"]) <= 60
+        assert int(cached.headers["X-Cache-TTL"]) == 180
     finally:
         app.state.fetch_lock.release()
     clock["now"] = 160
+    after_minute = client.get(url)
+    assert after_minute.headers["X-Cache"] == "HIT"
+    assert int(after_minute.headers["X-Cache-TTL"]) == 120
+    clock["now"] = 279
+    before_expiry = client.get(url)
+    assert before_expiry.headers["X-Cache"] == "HIT"
+    assert int(before_expiry.headers["X-Cache-TTL"]) == 1
+    assert len(calls) == 1
+    clock["now"] = 280
     refreshed = client.get(url)
     assert refreshed.headers["X-Cache"] == "MISS"
     assert refreshed.json()["player"]["pp"] == 2

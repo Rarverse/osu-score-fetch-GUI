@@ -141,7 +141,7 @@ export async function getScores(
     const data = (await response.json()) as ScoresResponse;
     const ttl = Number(response.headers.get("X-Cache-TTL"));
     if (Number.isFinite(ttl) && ttl > 0 && !signal.aborted) {
-      const entry = { data, expiresAt: Date.now() + Math.min(60, ttl) * 1000 };
+      const entry = { data, expiresAt: Date.now() + Math.min(180, ttl) * 1000 };
       for (const alias of [
         username,
         data.player.username,

@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     osu_client_secret: SecretStr | None = None
     log_format: Literal["text", "json"] = "text"
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
-    cache_timeout: int = Field(default=60, ge=60)
+    cache_timeout: int = Field(default=180, ge=60)
     cache_retention: int = Field(default=15552000, ge=60)
     cache_path: Path = API_ROOT / ".cache"
     # Salted daily aggregates. Override in production so this stays outside release dirs.

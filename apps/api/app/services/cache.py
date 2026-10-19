@@ -32,7 +32,7 @@ def not_found_cache_key(player: str) -> str:
 
 
 class JsonCache:
-    def __init__(self, directory: Path, ttl: int, retention: int = 15552000):
+    def __init__(self, directory: Path, ttl: int | None, retention: int | None = 15552000):
         self.directory = directory
         self.ttl = ttl
         self.retention = retention
@@ -40,6 +40,8 @@ class JsonCache:
         self.next_cleanup = 0.0
 
     def _cleanup(self) -> None:
+        if self.retention is None:
+            return
         now = time.time()
         if now < self.next_cleanup:
             return
@@ -59,7 +61,7 @@ class JsonCache:
         data, _remaining = fresh
         return data
 
-    def get_fresh(self, key: str) -> tuple[dict, int] | None:
+    def get_fresh(self, key: str) -> tuple[dict, int | None] | None:
         with self.lock:
             self._cleanup()
             path = self.directory / f"{key}.json"
@@ -76,6 +78,8 @@ class JsonCache:
                         "cache_entry_invalid", extra={"fields": {"reason": "invalid_timestamp"}}
                     )
                     return None
+                if self.ttl is None:
+                    return entry["data"], None
                 if age >= self.ttl:
                     return None
                 return entry["data"], max(0, int(self.ttl - age))

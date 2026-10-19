@@ -17,7 +17,8 @@ from app.services.rate_limit import UpstreamBusy, UpstreamLimiter
 
 router = APIRouter(prefix="/api/v1/images", tags=["images"])
 logger = logging.getLogger(__name__)
-IMAGE_TTL = 86400
+# Browser cache lifetime; the server keeps valid artwork indefinitely.
+IMAGE_MAX_AGE = 31536000
 MAX_IMAGE_BYTES = 5 * 1024 * 1024
 IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
 
@@ -42,7 +43,7 @@ def validate_image_url(url: str) -> None:
 def cached_image(cache, key: str) -> Response | None:
     cached = cache.get_fresh(key)
     if cached:
-        data, ttl = cached
+        data, _ttl = cached
         try:
             content = base64.b64decode(data["content"], validate=True)
             media_type = data["media_type"]
@@ -52,7 +53,7 @@ def cached_image(cache, key: str) -> Response | None:
                     media_type=media_type,
                     headers={
                         "X-Content-Type-Options": "nosniff",
-                        "Cache-Control": f"public, max-age={ttl}",
+                        "Cache-Control": f"public, max-age={IMAGE_MAX_AGE}",
                         "X-Cache": "HIT",
                     },
                 )
@@ -180,7 +181,7 @@ async def get_image(state, url: str) -> Response:
         media_type=media_type,
         headers={
             "X-Content-Type-Options": "nosniff",
-            "Cache-Control": f"public, max-age={IMAGE_TTL}",
+            "Cache-Control": f"public, max-age={IMAGE_MAX_AGE}",
             "X-Cache": "MISS",
         },
     )

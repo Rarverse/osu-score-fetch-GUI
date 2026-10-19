@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 
 from app.config import Settings
 from app.main import create_app
-from app.routers.images import IMAGE_TTL, MAX_IMAGE_BYTES
+from app.routers.images import IMAGE_MAX_AGE, MAX_IMAGE_BYTES
 
 AVATAR = "https://a.ppy.sh/2?12345"
 COVER = "https://assets.ppy.sh/beatmaps/1/covers/list@2x.jpg"
@@ -44,7 +44,7 @@ def test_images_are_same_origin_and_persist_across_app_restarts(tmp_path, monkey
     assert first.content == PNG
     assert first.headers["content-type"] == "image/png"
     assert first.headers["x-cache"] == "MISS"
-    assert first.headers["cache-control"] == f"public, max-age={IMAGE_TTL}"
+    assert first.headers["cache-control"] == f"public, max-age={IMAGE_MAX_AGE}"
     get.assert_called_once_with(url, timeout=(5, 15), stream=True, allow_redirects=False)
     # A fresh application must reuse the disk cache, without fetching upstream.
     second = TestClient(make_app(tmp_path)).get("/api/v1/images", params={"url": url})
@@ -105,25 +105,32 @@ def test_image_timeouts_can_be_retried(tmp_path, monkeypatch):
     assert client.get("/api/v1/images", params={"url": AVATAR}).status_code == 200
 
 
-def test_expired_and_corrupt_image_cache_is_refetched(tmp_path, monkeypatch):
+def test_old_images_are_reused_indefinitely_and_corrupt_images_are_refetched(tmp_path, monkeypatch):
     get = upstream(monkeypatch)
     app = make_app(tmp_path)
     client = TestClient(app)
     client.get("/api/v1/images", params={"url": AVATAR})
     key = hashlib.sha256(AVATAR.encode()).hexdigest()
     path = tmp_path / "images" / f"{key}.json"
-    # Keep the file but make its reusable timestamp expire.
+    # Existing cache files remain reusable even years after their original fetch.
     data = json.loads(path.read_text())
-    data["created_at"] -= IMAGE_TTL
+    data["created_at"] -= 10 * 365 * 86400
     path.write_text(json.dumps(data))
-    assert client.get("/api/v1/images", params={"url": AVATAR}).headers["x-cache"] == "MISS"
-    app.state.images.set(key, {"content": "broken base64", "media_type": "image/png"})
-    assert client.get("/api/v1/images", params={"url": AVATAR}).content == PNG
-    assert get.call_count == 3
-    # The existing retention policy also cleans old image cache files.
+    assert client.get("/api/v1/images", params={"url": AVATAR}).headers["x-cache"] == "HIT"
+    assert get.call_count == 1
+    # The ordinary score cache retention must not remove image files.
     os.utime(path, (0, 0))
     app.state.images.next_cleanup = 0
-    assert client.get("/api/v1/images", params={"url": AVATAR}).headers["x-cache"] == "MISS"
+    assert client.get("/api/v1/images", params={"url": AVATAR}).headers["x-cache"] == "HIT"
+    assert path.exists()
+    assert get.call_count == 1
+    app.state.images.set(key, {"content": "broken base64", "media_type": "image/png"})
+    assert client.get("/api/v1/images", params={"url": AVATAR}).content == PNG
+    assert get.call_count == 2
+    # The repaired image is also reusable after an application restart.
+    restarted = TestClient(make_app(tmp_path))
+    assert restarted.get("/api/v1/images", params={"url": AVATAR}).headers["x-cache"] == "HIT"
+    assert get.call_count == 2
 
 
 def test_image_is_still_returned_if_disk_cache_write_fails(tmp_path, monkeypatch):

@@ -194,3 +194,38 @@ test("automatic mode omits mode and shares resolved cache without manual queries
   assert.equal(urls.length, 3);
   assert.match(urls[2], /limit=50&mode=taiko/);
 });
+
+for (const ttl of [30, 180]) {
+  test(`browser scores remain cached for the server's ${ttl}-second window`, async () => {
+    let now = 100_000;
+    let calls = 0;
+    const api = loadApi({
+      Date: { now: () => now },
+      fetch: async () => {
+        calls++;
+        return new Response(
+          JSON.stringify({
+            player: { username: "Player", user_id: 123 },
+            mode: "mania",
+            scores: [],
+          }),
+          { headers: { "X-Cache-TTL": String(ttl) } },
+        );
+      },
+    });
+    const signal = new AbortController().signal;
+    await api.getScores("Player", 20, "mania", signal);
+    now += (ttl - 1) * 1000;
+    assert.equal(
+      (await api.getScores("123", 20, "mania", signal)).cache,
+      "MEMORY",
+    );
+    assert.equal(calls, 1);
+    now += 1000;
+    assert.notEqual(
+      (await api.getScores("Player", 20, "mania", signal)).cache,
+      "MEMORY",
+    );
+    assert.equal(calls, 2);
+  });
+}

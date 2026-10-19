@@ -13,8 +13,8 @@ from fastapi.responses import JSONResponse
 
 from app.config import Settings
 from app.logging_setup import configure_logging, request_id, safe_error_fields
-from app.routers.images import IMAGE_TTL, warm_images
 from app.routers.images import router as images_router
+from app.routers.images import warm_images
 from app.routers.players import router
 from app.services.cache import JsonCache
 from app.services.osu_client import OsuClient, ServiceError
@@ -67,9 +67,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         settings.negative_cache_ttl,
         settings.negative_cache_ttl,
     )
-    app.state.images = JsonCache(
-        settings.cache_path / "images", IMAGE_TTL, max(IMAGE_TTL, settings.cache_retention)
-    )
+    app.state.images = JsonCache(settings.cache_path / "images", ttl=None, retention=None)
     app.state.image_lock = AsyncLock()
     app.state.image_limiter = UpstreamLimiter(settings.osu_requests_per_minute, budget="images")
     app.state.image_queue = asyncio.Queue(maxsize=256)
