@@ -1,5 +1,19 @@
 const zh = {
   appName: "Raru 查分器",
+  clearInput: "清空用户名",
+  recentSearches: "最近查询 · 仅保存在此浏览器",
+  clearRecent: "清空记录",
+  removeRecent: "移除 {name} 的记录",
+  retry: "重新查询",
+  loadingPlayer: "正在查询 {name}…",
+  previousResult: "上次查询结果",
+  downloadAgain: "再次下载",
+  retryExport: "重试导出",
+  previewImage: "预览生成的图片",
+  quickNavigation: "快捷导航",
+  searchAgain: "重新查询",
+  backToTop: "返回顶部",
+
   home: "Raru 查分器首页",
   pageScroll: "页面滚动条",
   description:
@@ -14,7 +28,7 @@ const zh = {
   defaultMode: "玩家默认",
   scoreLimit: "成绩数量",
   silverGrade: "银色 {grade}",
-  downloadImage: "下载 B{count} 图片",
+  downloadImage: "导出 Top {count} 图片",
   downloadingImage: "正在生成图片…",
   downloadTitle: "正在准备 B{count} 图片",
   downloadImages: "正在加载头像与曲绘：{completed} / {total}",
@@ -101,6 +115,20 @@ type MessageKey = keyof typeof zh;
 
 const en: Record<MessageKey, string> = {
   appName: "Raru Score Fetcher",
+  clearInput: "Clear username",
+  recentSearches: "Recent searches · saved in this browser",
+  clearRecent: "Clear history",
+  removeRecent: "Remove {name} from history",
+  retry: "Retry search",
+  loadingPlayer: "Loading scores for {name}…",
+  previousResult: "Previous search result",
+  downloadAgain: "Download again",
+  retryExport: "Retry export",
+  previewImage: "Preview generated image",
+  quickNavigation: "Quick navigation",
+  searchAgain: "Search again",
+  backToTop: "Back to top",
+
   home: "Raru Score Fetcher home",
   pageScroll: "Page scrollbar",
   description:
@@ -115,7 +143,7 @@ const en: Record<MessageKey, string> = {
   defaultMode: "Player default",
   scoreLimit: "Number of scores",
   silverGrade: "Silver {grade}",
-  downloadImage: "Download B{count} image",
+  downloadImage: "Export Top {count} image",
   downloadingImage: "Generating image…",
   downloadTitle: "Preparing B{count} image",
   downloadImages: "Loading avatar and covers: {completed} / {total}",

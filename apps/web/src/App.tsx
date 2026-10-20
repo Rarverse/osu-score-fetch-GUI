@@ -1,4 +1,5 @@
 import {
+  ArrowUp,
   ArrowUpRight,
   Check,
   ChevronRight,
@@ -13,6 +14,8 @@ import {
   Search,
   Star,
   Trophy,
+  UserRound,
+  X,
 } from "lucide-react";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import Markdown from "react-markdown";
@@ -25,6 +28,7 @@ import { language, locale, t } from "./i18n";
 import ModeIcon from "./ModeIcon";
 import PageScrollbar from "./PageScrollbar";
 import RhythmBackground from "./RhythmBackground";
+import ScoreLimitSelect from "./ScoreLimitSelect";
 import {
   gradeLabel,
   gradeTitle,
@@ -125,7 +129,49 @@ function ScoreRow({ score, position }: { score: Score; position: number }) {
   );
 }
 
+interface RecentPlayer {
+  id: number;
+  name: string;
+  avatar: string;
+  mode: QueryMode;
+}
+
+const recentKey = "raru-recent-players";
+function readRecent(): RecentPlayer[] {
+  try {
+    const value: unknown = JSON.parse(localStorage.getItem(recentKey) || "[]");
+    if (!Array.isArray(value)) return [];
+    return value
+      .filter(
+        (item): item is RecentPlayer =>
+          item &&
+          Number.isSafeInteger(item.id) &&
+          item.id > 0 &&
+          typeof item.name === "string" &&
+          typeof item.avatar === "string" &&
+          ["auto", "osu", "taiko", "fruits", "mania"].includes(item.mode),
+      )
+      .slice(0, 5);
+  } catch {
+    return [];
+  }
+}
+
 export default function App() {
+  const [recent, setRecent] = useState(readRecent);
+  const [previousResult, setPreviousResult] = useState(false);
+  const [searchedName, setSearchedName] = useState("");
+  const [pendingName, setPendingName] = useState("");
+  const [lastQuery, setLastQuery] = useState<{
+    name: string;
+    mode: QueryMode;
+    limit: number;
+  } | null>(null);
+  const [preview, setPreview] = useState<{ url: string; blob: Blob } | null>(
+    null,
+  );
+  const [showQuickNav, setShowQuickNav] = useState(false);
+  const hero = useRef<HTMLElement>(null);
   const [username, setUsername] = useState("");
   const [apiExpanded, setApiExpanded] = useState(false);
   const [instructionsExpanded, setInstructionsExpanded] = useState(false);
@@ -152,6 +198,39 @@ export default function App() {
   const secureContext =
     window.isSecureContext ||
     ["localhost", "127.0.0.1", "::1"].includes(location.hostname);
+
+  useEffect(() => {
+    if (!hero.current) return;
+    const observer = new IntersectionObserver(([entry]) =>
+      setShowQuickNav(!entry.isIntersecting),
+    );
+    observer.observe(hero.current);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (preview) URL.revokeObjectURL(preview.url);
+    };
+  }, [preview]);
+
+  function updateRecent(next: RecentPlayer[]) {
+    setRecent(next);
+    try {
+      localStorage.setItem(recentKey, JSON.stringify(next));
+    } catch {
+      /* Storage can be unavailable in private browsing. */
+    }
+  }
+
+  function backToSearch() {
+    hero.current?.scrollIntoView({
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+        ? "instant"
+        : "smooth",
+    });
+    input.current?.focus({ preventScroll: true });
+  }
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -184,12 +263,14 @@ export default function App() {
   ) {
     request.current?.abort();
     setLoading(false);
-    setResult(null);
     setWaiting(null);
-    setCache("");
+    setPreviousResult(true);
     setDownloadError("");
     setDownloadProgress(null);
     setDownloadReady(false);
+    setPreview(null);
+    setLastQuery({ name, mode: selectedMode, limit: selectedLimit });
+    setPendingName(name);
     const credentials = useOwnApi
       ? { clientId: apiClientId.trim(), clientSecret: apiClientSecret.trim() }
       : undefined;
@@ -208,7 +289,6 @@ export default function App() {
     request.current = controller;
     setLoading(true);
     setError("");
-    setResult(null);
     setWaiting(null);
     try {
       for (let attempt = 0; attempt <= 5; attempt++) {
@@ -222,6 +302,21 @@ export default function App() {
           );
           if (!controller.signal.aborted) {
             setResult(response.data);
+            setPreviousResult(false);
+            setSearchedName(name);
+            updateRecent(
+              [
+                {
+                  id: response.data.player.user_id,
+                  name: response.data.player.username,
+                  avatar: response.data.player.avatar_url,
+                  mode: selectedMode,
+                },
+                ...recent.filter(
+                  (item) => item.id !== response.data.player.user_id,
+                ),
+              ].slice(0, 5),
+            );
             setResultLimit(selectedLimit);
             setCache(response.cache);
           }
@@ -264,10 +359,18 @@ export default function App() {
     if (next === mode) return;
     setMode(next);
     setError("");
+    if (result && username.trim().toLowerCase() === searchedName.toLowerCase())
+      void fetchScores(searchedName, next);
   }
 
   function changeLimit(next: number) {
     setLimit(next);
+    if (
+      next !== limit &&
+      result &&
+      username.trim().toLowerCase() === searchedName.toLowerCase()
+    )
+      void fetchScores(searchedName, mode, next);
   }
 
   function cancelQuery() {
@@ -277,7 +380,11 @@ export default function App() {
   }
 
   async function downloadScores() {
-    if (!result || downloadInProgress.current) return;
+    if (!result || loading || downloadInProgress.current) return;
+    if (preview) {
+      saveBestScores(preview.blob, result, resultLimit);
+      return;
+    }
     downloadInProgress.current = true;
     const controller = new AbortController();
     request.current = controller;
@@ -289,6 +396,7 @@ export default function App() {
         if (!controller.signal.aborted) setDownloadProgress(progress);
       });
       if (!controller.signal.aborted) {
+        setPreview({ blob, url: URL.createObjectURL(blob) });
         saveBestScores(blob, result, resultLimit);
         setDownloadReady(true);
       }
@@ -330,7 +438,7 @@ export default function App() {
       </header>
       <main>
         <RhythmBackground />
-        <section className="hero" aria-labelledby="page-title">
+        <section ref={hero} className="hero" aria-labelledby="page-title">
           <h1 id="page-title" className="sr-only">
             {t("query")}
           </h1>
@@ -357,6 +465,20 @@ export default function App() {
                 disabled={loading || exporting}
                 required
               />
+              {username && (
+                <button
+                  type="button"
+                  className="clear-input"
+                  aria-label={t("clearInput")}
+                  disabled={loading || exporting}
+                  onClick={() => {
+                    setUsername("");
+                    input.current?.focus();
+                  }}
+                >
+                  <X size={16} />
+                </button>
+              )}
               <kbd>
                 {/Mac|iPhone|iPad/.test(navigator.platform) ? (
                   <Command size={11} />
@@ -388,6 +510,7 @@ export default function App() {
                   disabled={loading || exporting}
                   onClick={() => changeMode("auto")}
                 >
+                  <UserRound className="mode-icon" aria-hidden="true" />
                   {t("defaultMode")}
                 </button>
                 {(Object.keys(modeLabels) as Ruleset[]).map((value) => (
@@ -403,20 +526,64 @@ export default function App() {
                   </button>
                 ))}
               </fieldset>
-              <label className="limit-label" htmlFor="limit">
-                {t("scoreLimit")}
-              </label>
-              <select
-                id="limit"
+              <ScoreLimitSelect
                 value={limit}
-                onChange={(event) => changeLimit(Number(event.target.value))}
+                onChange={changeLimit}
                 disabled={loading || exporting}
-              >
-                <option value={20}>Top 20</option>
-                <option value={50}>Top 50</option>
-              </select>
+              />
             </div>
           </form>
+          {recent.length > 0 && (
+            <div className="recent-searches">
+              <div className="recent-heading">
+                <span>{t("recentSearches")}</span>
+                <button
+                  type="button"
+                  disabled={loading}
+                  onClick={() => updateRecent([])}
+                >
+                  {t("clearRecent")}
+                </button>
+              </div>
+              <div className="recent-list">
+                {recent.map((player) => (
+                  <div className="recent-player" key={player.id}>
+                    <button
+                      type="button"
+                      disabled={loading || exporting}
+                      onClick={() => {
+                        setUsername(player.name);
+                        setMode(player.mode);
+                        void fetchScores(player.name, player.mode);
+                      }}
+                    >
+                      {player.avatar && <img src={player.avatar} alt="" />}
+                      <span>
+                        {player.name}
+                        <small>
+                          {player.mode === "auto"
+                            ? t("defaultMode")
+                            : modeLabels[player.mode]}
+                        </small>
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      disabled={loading}
+                      aria-label={t("removeRecent", { name: player.name })}
+                      onClick={() =>
+                        updateRecent(
+                          recent.filter((item) => item.id !== player.id),
+                        )
+                      }
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           <div className="api-credentials">
             <button
               type="button"
@@ -529,6 +696,22 @@ export default function App() {
             <div>
               <strong>{t("unableToQuery")}</strong>
               <p>{error}</p>
+              {lastQuery && (
+                <button
+                  className="text-action"
+                  type="button"
+                  disabled={loading || exporting}
+                  onClick={() =>
+                    void fetchScores(
+                      lastQuery.name,
+                      lastQuery.mode,
+                      lastQuery.limit,
+                    )
+                  }
+                >
+                  {t("retry")}
+                </button>
+              )}
             </div>
           </div>
         )}
@@ -537,7 +720,7 @@ export default function App() {
           <section className="loading-panel" role="status" aria-live="polite">
             <LoaderCircle size={24} className="spin" />
             <div>
-              <strong>{t("loadingScores")}</strong>
+              <strong>{t("loadingPlayer", { name: pendingName })}</strong>
               <p>{t("loadingMode", { mode: selectedModeLabel })}</p>
             </div>
             <button type="button" onClick={cancelQuery}>
@@ -545,13 +728,30 @@ export default function App() {
             </button>
           </section>
         )}
+        {loading && !result && (
+          <div className="results-skeleton" aria-hidden="true">
+            <div className="skeleton-player" />
+            {[0, 1, 2].map((row) => (
+              <div className="skeleton-row" key={row} />
+            ))}
+          </div>
+        )}
         {result && (
           <section
             className="results"
+            aria-busy={loading}
             aria-label={t("playerScores")}
             aria-live="polite"
           >
-            <div className="player-card">
+            {previousResult && (
+              <p className="previous-result" role="status">
+                {t("previousResult")}
+              </p>
+            )}
+            <div
+              className="player-card"
+              key={`${result.player.user_id}-${result.mode}-${resultLimit}-${result.fetched_at}`}
+            >
               <div className="player-identity">
                 {result.player.avatar_url ? (
                   <img
@@ -611,6 +811,9 @@ export default function App() {
               <div>
                 <Trophy size={17} />
                 <h2>{t("bestPerformance")}</h2>
+                <span>
+                  {modeLabels[result.mode]} · Top {resultLimit}
+                </span>
                 <span>{t("scoreCount", { count: result.scores.length })}</span>
               </div>
               <span className="cache-status">
@@ -626,7 +829,7 @@ export default function App() {
               <button
                 type="button"
                 className="download-button"
-                disabled={exporting || !result.scores.length}
+                disabled={loading || exporting || !result.scores.length}
                 onClick={() => void downloadScores()}
               >
                 {exporting ? (
@@ -636,58 +839,76 @@ export default function App() {
                 )}
                 {exporting
                   ? t("downloadingImage")
-                  : t("downloadImage", { count: resultLimit })}
+                  : preview
+                    ? t("downloadAgain")
+                    : t("downloadImage", { count: resultLimit })}
               </button>
             </div>
-            {(exporting || downloadReady) && (
-              <div
-                key={exporting ? "exporting" : "ready"}
-                className="download-status"
-                role="status"
-                aria-live="polite"
-              >
-                {exporting ? (
-                  <LoaderCircle size={20} className="spin" />
-                ) : (
-                  <Check size={20} />
-                )}
-                <div>
-                  <strong>
-                    {exporting
-                      ? t("downloadTitle", { count: resultLimit })
-                      : t("downloadReady")}
-                  </strong>
-                  <p>
-                    {exporting
-                      ? downloadProgress?.stage === "images"
-                        ? t("downloadImages", {
-                            completed: downloadProgress.completed,
-                            total: downloadProgress.total,
-                          })
-                        : t("downloadRendering")
-                      : t("downloadBrowser")}
-                  </p>
-                  {exporting && downloadProgress?.stage === "images" && (
-                    <>
-                      <progress
-                        value={downloadProgress.completed}
-                        max={downloadProgress.total || 1}
-                        aria-label={t("downloadImageProgress")}
-                      />
-                      <small>{t("downloadPacing")}</small>
-                    </>
+            <div className="export-feedback">
+              {(exporting || downloadReady) && (
+                <div
+                  key={exporting ? "exporting" : "ready"}
+                  className="download-status"
+                  role="status"
+                  aria-live="polite"
+                >
+                  {exporting ? (
+                    <LoaderCircle size={20} className="spin" />
+                  ) : (
+                    <Check size={20} />
                   )}
+                  <div>
+                    <strong>
+                      {exporting
+                        ? t("downloadTitle", { count: resultLimit })
+                        : t("downloadReady")}
+                    </strong>
+                    <p>
+                      {exporting
+                        ? downloadProgress?.stage === "images"
+                          ? t("downloadImages", {
+                              completed: downloadProgress.completed,
+                              total: downloadProgress.total,
+                            })
+                          : t("downloadRendering")
+                        : t("downloadBrowser")}
+                    </p>
+                    {exporting && downloadProgress?.stage === "images" && (
+                      <>
+                        <progress
+                          value={downloadProgress.completed}
+                          max={downloadProgress.total || 1}
+                          aria-label={t("downloadImageProgress")}
+                        />
+                        <small>{t("downloadPacing")}</small>
+                      </>
+                    )}
+                  </div>
                 </div>
-              </div>
-            )}
-            {downloadError && (
-              <div
-                className="download-status download-status-error"
-                role="alert"
-              >
-                <CircleAlert size={20} />
-                <p>{downloadError}</p>
-              </div>
+              )}
+              {downloadError && (
+                <div
+                  className="download-status download-status-error"
+                  role="alert"
+                >
+                  <CircleAlert size={20} />
+                  <p>{downloadError}</p>
+                  <button
+                    className="text-action"
+                    type="button"
+                    disabled={loading || exporting}
+                    onClick={() => void downloadScores()}
+                  >
+                    {t("retryExport")}
+                  </button>
+                </div>
+              )}
+            </div>
+            {preview && (
+              <details className="export-preview">
+                <summary>{t("previewImage")}</summary>
+                <img src={preview.url} alt={t("previewImage")} />
+              </details>
             )}
             {result.scores.length ? (
               <div className="score-list">
@@ -770,6 +991,24 @@ export default function App() {
         </a>
         */}
       </footer>
+      {showQuickNav && result && (
+        <nav className="quick-nav" aria-label={t("quickNavigation")}>
+          <span>
+            {result.player.username} · {modeLabels[result.mode]}
+          </span>
+          <button type="button" onClick={backToSearch}>
+            <Search size={16} />
+            {t("searchAgain")}
+          </button>
+          <button
+            type="button"
+            aria-label={t("backToTop")}
+            onClick={backToSearch}
+          >
+            <ArrowUp size={18} />
+          </button>
+        </nav>
+      )}
       <PageScrollbar />
     </div>
   );
