@@ -120,7 +120,22 @@ docker compose --env-file .env.deploy -f compose.yaml up -d --wait --wait-timeou
 
 首次镜像部署需将仓库的 `deploy/compose.yaml` 放在 `/opt/osu-score-api/compose.yaml`，复制 `deploy/.env.deploy.example` 为该目录的 `.env.deploy` 并将 `IMAGE_TAG` 改为已发布标签；复制 `deploy/env.example` 到 `/etc/osu-score-api/env`，填入真实凭据并设权限 600。私有 GHCR 镜像需先用只读 `read:packages` token 登录。这个独立目录没有构建上下文，不能用其中的 `build` 配置构建源码。
 
-流水线按 git SHA 发布镜像，只更新 `.env.deploy` 中的 `IMAGE_TAG`；web 分享地址由仓库变量 `SITE_URL` 构建进镜像。API 和 web 健康检查均通过后才继续部署验证。回滚时将 `IMAGE_TAG` 改回已知可用 SHA，再执行上面的 pull 和 up 命令。
+`main` 自动部署流水线按 git SHA 发布镜像，只更新 `.env.deploy` 中的 `IMAGE_TAG`；web 分享地址由仓库变量 `SITE_URL` 构建进镜像。API 和 web 健康检查均通过后才继续部署验证。回滚时将 `IMAGE_TAG` 改回已知可用 SHA，再执行上面的 pull 和 up 命令。
+
+### Release 版本镜像
+
+将 `.github/workflows/release.yml` 提交并推送后，在 GitHub 创建并发布 Release，标签使用 `v0.1.1` 这样的版本号（也支持 `v0.2.0-rc.1`）。标签必须指向包含该 workflow 的提交；保存草稿不会触发发布。
+
+Release workflow 会复用 CI 的前后端检查和 Docker 部署测试，通过后将该标签对应代码构建为以下镜像（`linux/amd64`）：
+
+```text
+ghcr.io/rarverse/osu-score-fetch-gui-api:v0.1.1
+ghcr.io/rarverse/osu-score-fetch-gui-web:v0.1.1
+```
+
+发布使用 `GITHUB_TOKEN` 写入 GHCR，不依赖 `DEPLOY_ENABLED` 或 SSH 部署密钥，也不触发服务器部署或更新 `latest`。web 同样读取仓库变量 `SITE_URL`。预发布版本也会上传对应版本标签。
+
+等待 Release workflow 的两个镜像发布任务都成功后，将镜像部署目录 `.env.deploy` 中的 `IMAGE_TAG` 设置为 `v0.1.1`，再执行上面的 pull 和 up 命令。切换或回滚到其他已发布版本时，更改 `IMAGE_TAG` 即可；若仍启用 `main` 自动部署，后续推送会再次将服务器更新为对应的 git SHA。
 
 从旧部署切换到根目录源码部署时：
 
