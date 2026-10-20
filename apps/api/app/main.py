@@ -12,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.config import Settings
-from app.logging_setup import configure_logging, request_id, safe_error_fields
+from app.logging_setup import configure_logging, request_id, safe_error_fields, score_query_log
 from app.routers.images import router as images_router
 from app.routers.images import warm_images
 from app.routers.players import router
@@ -86,6 +86,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def request_log(request: Request, call_next):
         identifier = uuid.uuid4().hex
         token = request_id.set(identifier)
+        query_fields = {
+            "query": None,
+            "username": None,
+            "user_id": None,
+            "api_slot": None,
+            "cache": "NOT_CHECKED",
+            "upstream_requests": 0,
+            "token_refreshed": False,
+        }
+        query_token = score_query_log.set(query_fields)
         started = time.perf_counter()
         credentials = (
             "custom"
@@ -127,6 +137,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                         fields[field] = value
                 if code := getattr(request.state, "error_code", None):
                     fields["error_code"] = code
+                if fields["route"] == "/api/v1/players/{username}/scores":
+                    logger.log(
+                        logging.WARNING if response.status_code >= 400 else logging.INFO,
+                        "scores_query_completed",
+                        extra={"fields": {**query_fields, **fields}},
+                    )
                 logger.log(
                     logging.WARNING if response.status_code >= 400 else logging.INFO,
                     "request_completed",
@@ -134,6 +150,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 )
             return response
         finally:
+            score_query_log.reset(query_token)
             request_id.reset(token)
 
     @app.exception_handler(ServiceError)

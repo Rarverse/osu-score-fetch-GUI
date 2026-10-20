@@ -1,6 +1,11 @@
 import io
 import json
 import logging
+import time
+from concurrent.futures import ThreadPoolExecutor
+from threading import Event
+from types import SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
 import requests
@@ -10,10 +15,16 @@ from test_images import AVATAR, PNG, upstream
 from test_usage import _scores
 
 from app.config import Settings
-from app.logging_setup import JsonFormatter, TextFormatter, configure_logging, request_id
+from app.logging_setup import (
+    JsonFormatter,
+    TextFormatter,
+    configure_logging,
+    request_id,
+    score_query_log,
+)
 from app.main import create_app
 from app.services.cache import JsonCache
-from app.services.osu_client import ServiceError, TimeoutAdapter
+from app.services.osu_client import OsuClient, ServiceError, TimeoutAdapter
 from app.services.rate_limit import UpstreamBusy, UpstreamLimiter
 
 
@@ -35,7 +46,7 @@ def entries(stream):
     return [json.loads(line) for line in stream.getvalue().splitlines()]
 
 
-def test_request_logs_link_to_response_without_credentials_or_player_data(tmp_path, logs):
+def test_request_logs_link_to_response_without_credentials(tmp_path, logs):
     app = create_app(Settings(_env_file=None, cache_path=tmp_path))
     app.state.osu.get_user_scores = lambda *_args: _scores("mania", 123, "private-player")
     client = TestClient(app)
@@ -58,7 +69,6 @@ def test_request_logs_link_to_response_without_credentials_or_player_data(tmp_pa
     assert result["duration_ms"] >= 0
     raw = logs.getvalue()
     for private in (
-        "private-player",
         "test-query",
         "987654321",
         "test-secret-do-not-log",
@@ -110,7 +120,8 @@ def test_health_is_quiet_and_unexpected_failures_are_safe(tmp_path, logs):
     assert response.status_code == 500
     assert response.json()["error"]["code"] == "INTERNAL_ERROR"
     assert "private-secret-in-exception" not in logs.getvalue()
-    assert entries(logs)[-2]["error_type"] == "RuntimeError"
+    failed = next(item for item in entries(logs) if item["event"] == "request_failed")
+    assert failed["error_type"] == "RuntimeError"
     assert entries(logs)[-1]["error_code"] == "INTERNAL_ERROR"
 
 
@@ -191,14 +202,16 @@ def test_query_logs_explain_cache_misses_hits_and_returned_scores(tmp_path, logs
     app = create_app(Settings(_env_file=None, cache_path=tmp_path))
     app.state.osu.get_user_scores = lambda *_args: _scores("mania", 123, "private-player")
     client = TestClient(app)
-    for expected_cache in ("MISS", "HIT"):
-        response = client.get("/api/v1/players/private-player/scores?limit=20")
+    for query, expected_cache in (("Private-Player", "MISS"), ("123", "HIT")):
+        response = client.get(f"/api/v1/players/{query}/scores?limit=20")
         records = [
             item
             for item in entries(logs)
             if item.get("request_id") == response.headers["X-Request-ID"]
         ]
         assert records[0]["event"] == "request_started"
+        started = next(item for item in records if item["event"] == "scores_query_started")
+        assert started["query"] == query
         assert (
             next(item for item in records if item["event"] == "scores_query_started")["mode"]
             == "auto"
@@ -208,12 +221,314 @@ def test_query_logs_explain_cache_misses_hits_and_returned_scores(tmp_path, logs
             == expected_cache
         )
         ready = next(item for item in records if item["event"] == "scores_ready")
+        assert ready["username"] == "private-player"
+        assert ready["user_id"] == 123
+        assert "api_slot" not in ready
         assert ready["mode"] == "mania"
         assert ready["limit"] == 20
         assert ready["score_count"] == len(response.json()["scores"])
         assert records[-1]["event"] == "request_completed"
         assert records[-1]["cache_ttl"]
-    assert "private-player" not in logs.getvalue()
+        summaries = [item for item in records if item["event"] == "scores_query_completed"]
+        assert len(summaries) == 1
+        summary = summaries[0]
+        assert summary["query"] == query
+        assert summary["username"] == "private-player"
+        assert summary["user_id"] == 123
+        assert summary["cache"] == expected_cache
+        assert summary["status"] == 200
+        assert score_query_log.get() is None
+        assert summary["api_slot"] is None
+        assert summary["upstream_requests"] == 0  # This test stubs the entire upstream service.
+        assert summary["token_refreshed"] is False
+        assert summary["duration_ms"] >= 0
+
+
+@pytest.fixture
+def score_transport(monkeypatch):
+    from ossapi import Ossapi
+
+    sent = []
+    behavior = {"phase": None, "status": 200, "timeout": False}
+
+    def send(_adapter, request, **_kwargs):
+        phase = (
+            "oauth"
+            if request.url.endswith("/oauth/token")
+            else "scores"
+            if "/scores/" in request.url
+            else "player"
+        )
+        sent.append(phase)
+        if phase == behavior["phase"] and behavior["timeout"]:
+            raise requests.Timeout("private-network-error")
+        response = requests.Response()
+        response.status_code = behavior["status"] if phase == behavior["phase"] else 200
+        response.request, response.url = request, request.url
+        body = (
+            {"access_token": "private-access-token", "expires_in": 3600}
+            if phase == "oauth"
+            else []
+            if phase == "scores"
+            else {"id": 123}
+        )
+        response._content = json.dumps(body).encode()
+        response._content_consumed = True
+        return response
+
+    monkeypatch.setattr(HTTPAdapter, "send", send)
+    monkeypatch.setattr(
+        Ossapi,
+        "_instantiate_type",
+        lambda _self, _type, data: (
+            []
+            if isinstance(data, list)
+            else SimpleNamespace(
+                id=123,
+                username="Player",
+                country_code="CN",
+                avatar_url="",
+                playmode="mania",
+                statistics=None,
+            )
+        ),
+    )
+    return sent, behavior
+
+
+@pytest.mark.parametrize("custom", [False, True])
+def test_query_summary_counts_real_transport_calls_and_resets_between_requests(
+    tmp_path, logs, score_transport, custom
+):
+    sent, _behavior = score_transport
+    app = create_app(
+        Settings(
+            _env_file=None,
+            cache_path=tmp_path,
+            osu_client_id_3=987653,
+            osu_client_secret_3="private-site-secret",
+        )
+    )
+    app.state.osu.limiter = Mock()
+    headers = {"X-Osu-Client-Id": "987654321", "X-Osu-Client-Secret": "private-custom-secret"}
+    client = TestClient(app)
+    for path, expected_count in (
+        ("Player/scores", 3),
+        ("123/scores", 0),
+        ("Player/scores?mode=osu", 3 if custom else 2),
+    ):
+        before = len(sent)
+        response = client.get(f"/api/v1/players/{path}", headers=headers if custom else {})
+        assert response.status_code == 200
+        (summary,) = [
+            item
+            for item in entries(logs)
+            if item["event"] == "scores_query_completed"
+            and item["request_id"] == response.headers["X-Request-ID"]
+        ]
+        assert summary["upstream_requests"] == len(sent) - before == expected_count
+        assert summary["token_refreshed"] is (expected_count == 3)
+        assert summary["api_slot"] == (3 if expected_count and not custom else None)
+        assert summary["credentials"] == ("custom" if custom else "site")
+        assert summary["cache"] == ("HIT" if expected_count == 0 else "MISS")
+        assert summary["username"] == "Player"
+        assert summary["user_id"] == 123
+        assert summary["status"] == 200
+    for private in ("private-", "98765"):
+        assert private not in logs.getvalue()
+
+
+@pytest.mark.parametrize(
+    ("phase", "upstream_status", "timeout", "status", "count", "refreshed", "code"),
+    [
+        ("oauth", 401, False, 502, 1, False, "UPSTREAM_ERROR"),
+        ("player", 404, False, 404, 2, True, "PLAYER_NOT_FOUND"),
+        ("scores", 429, False, 503, 3, True, "UPSTREAM_BUSY"),
+        ("scores", 200, True, 502, 3, True, "UPSTREAM_ERROR"),
+    ],
+)
+def test_failed_query_summary_reports_actual_calls(
+    tmp_path, logs, score_transport, phase, upstream_status, timeout, status, count, refreshed, code
+):
+    sent, behavior = score_transport
+    behavior.update(phase=phase, status=upstream_status, timeout=timeout)
+    app = create_app(
+        Settings(
+            _env_file=None,
+            cache_path=tmp_path,
+            osu_client_id_3=987653,
+            osu_client_secret_3="private-site-secret",
+        )
+    )
+    app.state.osu.limiter = Mock()
+    app.state.osu.limiter.defer.return_value = 60
+    client = TestClient(app)
+    response = client.get("/api/v1/players/Player/scores")
+    assert response.status_code == status
+    (summary,) = [item for item in entries(logs) if item["event"] == "scores_query_completed"]
+    assert summary["request_id"] == response.headers["X-Request-ID"]
+    assert summary["query"] == "Player"
+    assert summary["upstream_requests"] == len(sent) == count
+    assert summary["token_refreshed"] is refreshed
+    assert summary["api_slot"] == 3
+    assert summary["cache"] == "MISS"
+    assert summary["status"] == status
+    assert summary["error_code"] == code
+    assert summary["level"] == "WARNING"
+    assert "error" in summary["message"]
+    assert "private-" not in logs.getvalue()
+    if status == 404:
+        again = client.get("/api/v1/players/Player/scores")
+        cached = [item for item in entries(logs) if item["event"] == "scores_query_completed"][-1]
+        assert again.status_code == 404
+        assert cached["cache"] == "HIT"
+        assert cached["upstream_requests"] == 0
+        assert cached["api_slot"] is None
+        assert cached["token_refreshed"] is False
+
+
+@pytest.mark.parametrize(
+    ("case", "status", "code", "cache"),
+    [
+        ("validation", 422, "INVALID_REQUEST", "NOT_CHECKED"),
+        ("player", 422, "INVALID_PLAYER", "NOT_CHECKED"),
+        ("rate", 429, "RATE_LIMITED", "NOT_CHECKED"),
+        ("busy", 503, "SERVER_BUSY", "MISS"),
+        ("budget", 503, "UPSTREAM_BUSY", "MISS"),
+        ("unconfigured", 503, "NOT_CONFIGURED", "MISS"),
+        ("unexpected", 500, "INTERNAL_ERROR", "MISS"),
+    ],
+)
+def test_query_summary_covers_failures_before_http(
+    tmp_path, logs, monkeypatch, score_transport, case, status, code, cache
+):
+    sent, _behavior = score_transport
+    credentials = (
+        {}
+        if case == "unconfigured"
+        else {
+            "osu_client_id_3": 987653,
+            "osu_client_secret_3": "private-site-secret",
+        }
+    )
+    app = create_app(Settings(_env_file=None, cache_path=tmp_path, **credentials))
+    app.state.osu.limiter = Mock()
+    if case == "rate":
+        monkeypatch.setattr(app.state.limiter, "check", lambda *_args: 60)
+    elif case == "busy":
+        app.state.fetch_lock = Mock(acquire=Mock(return_value=False))
+    elif case == "budget":
+        app.state.osu.limiter.ensure_capacity.side_effect = UpstreamBusy(60)
+    elif case == "unexpected":
+        monkeypatch.setattr(app.state.osu, "get_user_scores", Mock(side_effect=RuntimeError()))
+    name = "invalid-player-" * 3 if case == "player" else "Player"
+    url = f"/api/v1/players/{name}/scores"
+    response = TestClient(app).get(url + ("?mode=invalid" if case == "validation" else ""))
+    assert response.status_code == status
+    (summary,) = [item for item in entries(logs) if item["event"] == "scores_query_completed"]
+    assert summary["status"] == status
+    assert summary["error_code"] == code
+    assert summary["cache"] == cache
+    assert summary["upstream_requests"] == len(sent) == 0
+    assert summary["token_refreshed"] is False
+    assert summary["api_slot"] == (3 if case == "budget" else None)
+    assert score_query_log.get() is None
+
+
+def test_concurrent_queries_do_not_share_summary_fields(
+    tmp_path, logs, monkeypatch, score_transport
+):
+    _sent, _behavior = score_transport
+    app = create_app(
+        Settings(
+            _env_file=None,
+            cache_path=tmp_path,
+            osu_client_id_3=987653,
+            osu_client_secret_3="private-site-secret",
+        )
+    )
+    app.state.osu.limiter = Mock()
+    entered, release = Event(), Event()
+    send = HTTPAdapter.send
+
+    def blocked_send(adapter, request, **kwargs):
+        if "/users/" in request.url and "/scores/" not in request.url:
+            entered.set()
+            assert release.wait(5)
+        return send(adapter, request, **kwargs)
+
+    monkeypatch.setattr(HTTPAdapter, "send", blocked_send)
+    client = TestClient(app)
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        pending = executor.submit(client.get, "/api/v1/players/Player/scores")
+        try:
+            assert entered.wait(5)
+            busy = client.get("/api/v1/players/OtherPlayer/scores")
+            assert busy.status_code == 503
+        finally:
+            release.set()
+        response = pending.result(timeout=5)
+    assert response.status_code == 200
+    summaries = [item for item in entries(logs) if item["event"] == "scores_query_completed"]
+    assert len(summaries) == 2
+    by_id = {item["request_id"]: item for item in summaries}
+    active = by_id[response.headers["X-Request-ID"]]
+    rejected = by_id[busy.headers["X-Request-ID"]]
+    assert active["query"] == "Player"
+    assert active["upstream_requests"] == 3
+    assert active["api_slot"] == 3
+    assert active["token_refreshed"] is True
+    assert rejected["query"] == "OtherPlayer"
+    assert rejected["upstream_requests"] == 0
+    assert rejected["api_slot"] is None
+    assert rejected["token_refreshed"] is False
+
+
+@pytest.mark.parametrize("slots", [(1,), (1, 2), (1, 2, 3), (1, 3), (3,)])
+def test_upstream_query_logs_identify_configured_slot_and_custom_credentials(
+    logs, monkeypatch, slots
+):
+    configure_logging()
+    values = {}
+    for slot in slots:
+        suffix = "" if slot == 1 else f"_{slot}"
+        values[f"osu_client_id{suffix}"] = 987650 + slot
+        values[f"osu_client_secret{suffix}"] = f"private-secret-{slot}"
+    service = OsuClient(Settings(_env_file=None, **values))
+    service.limiter = Mock()
+    api = SimpleNamespace(
+        user=lambda *_args, **_kwargs: SimpleNamespace(
+            id=123,
+            username="Player",
+            country_code="CN",
+            avatar_url="",
+            playmode="mania",
+            statistics=None,
+        ),
+        user_scores=lambda *_args, **_kwargs: [],
+    )
+    for token in service._tokens:
+        token.client = api
+        token.expires_at = time.monotonic() + 3600
+    for _ in range(2):
+        for slot in slots:
+            service.get_user_scores("Player")
+            started = next(
+                item for item in reversed(entries(logs)) if item["event"] == "osu_query_started"
+            )
+            assert started["api_slot"] == slot
+            assert started["credentials"] == "site"
+            assert started["query"] == "Player"
+            assert started["required_requests"] == 2
+
+    monkeypatch.setattr(service, "get_ossapi_client", lambda *_args: api)
+    service.get_user_scores("123", client_id=987654321, client_secret="private-custom-secret")
+    started = next(item for item in reversed(entries(logs)) if item["event"] == "osu_query_started")
+    assert started["credentials"] == "custom"
+    assert started["api_slot"] is None
+    assert started["query"] == "123"
+    assert "98765" not in logs.getvalue()
+    assert "private-" not in logs.getvalue()
 
 
 def test_unexpected_errors_include_safe_code_locations(tmp_path, logs):

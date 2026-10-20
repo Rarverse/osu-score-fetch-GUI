@@ -6,7 +6,7 @@ from fastapi import APIRouter, BackgroundTasks, Header, Query, Request, Response
 from pydantic import ValidationError
 
 from app.client_ip import client_ip
-from app.logging_setup import safe_error_fields
+from app.logging_setup import safe_error_fields, score_query_log
 from app.routers.images import enqueue_images
 from app.schemas.scores import ErrorResponse, Ruleset, ScoresResponse
 from app.services.cache import normalize_player, not_found_cache_key, score_cache_key
@@ -68,11 +68,17 @@ def player_scores(
     settings = state.settings
     player_id: str | None = None
     resolved_mode = mode
-    logger.info("scores_query_started", extra={"fields": {"mode": mode or "auto", "limit": limit}})
     try:
         name = username.strip()
         if not name or len(name) > 32 or any(ord(char) < 32 or char in "/\\?#" for char in name):
             raise ServiceError(422, "INVALID_PLAYER", "请输入 1–32 字符的用户名或 ID。")
+        query_fields = score_query_log.get()
+        if query_fields is not None:
+            query_fields.update(query=name, mode=mode or "auto", limit=limit)
+        logger.info(
+            "scores_query_started",
+            extra={"fields": {"query": name, "mode": mode or "auto", "limit": limit}},
+        )
         name = normalize_player(name)
         if (osu_client_id is None) != (osu_client_secret is None) or (
             osu_client_secret is not None and not osu_client_secret.strip()
@@ -101,6 +107,8 @@ def player_scores(
         key = score_cache_key(name, mode)
         missing_key = not_found_cache_key(name)
         result = _cached_scores(state, key)
+        if query_fields is not None:
+            query_fields["cache"] = "HIT" if result else "MISS"
         logger.info("scores_cache_lookup", extra={"fields": {"cache": "HIT" if result else "MISS"}})
         cached_missing = state.not_found.get_fresh(missing_key)
         if (
@@ -184,10 +192,19 @@ def player_scores(
         player_id = str(result.player.user_id)
         resolved_mode = result.mode
         selected = result.model_copy(update={"scores": result.scores[:limit]})
+        if query_fields is not None:
+            query_fields.update(
+                username=result.player.username,
+                user_id=result.player.user_id,
+                mode=result.mode,
+                score_count=len(selected.scores),
+            )
         logger.info(
             "scores_ready",
             extra={
                 "fields": {
+                    "username": result.player.username,
+                    "user_id": result.player.user_id,
                     "mode": result.mode,
                     "limit": limit,
                     "score_count": len(selected.scores),

@@ -8,7 +8,7 @@ from ossapi import GameMode, Ossapi, ScoreType
 from requests.adapters import HTTPAdapter
 
 from app.config import Settings
-from app.logging_setup import safe_error_fields
+from app.logging_setup import safe_error_fields, score_query_log
 from app.schemas.scores import Player, Ruleset, Score, ScoresResponse
 from app.services.rate_limit import UpstreamBusy, UpstreamLimiter
 
@@ -45,6 +45,9 @@ class TimeoutAdapter(HTTPAdapter):
         )
         logger.debug("osu_http_started", extra={"fields": {"phase": phase, "wait_ms": wait_ms}})
         started = time.perf_counter()
+        query_fields = score_query_log.get()
+        if query_fields is not None:
+            query_fields["upstream_requests"] += 1
         try:
             response = super().send(request, **kwargs)
         except requests.RequestException as error:
@@ -115,6 +118,13 @@ class OsuClient:
     def __init__(self, settings: Settings):
         self.settings = settings
         self.credentials = settings.osu_credentials
+        self._api_slots = [
+            slot
+            for slot, client_id in enumerate(
+                (settings.osu_client_id, settings.osu_client_id_2, settings.osu_client_id_3), 1
+            )
+            if client_id is not None
+        ]
         self._tokens = [SiteToken() for _ in range(max(1, len(self.credentials)))]
         self._slot = 0
         self._next_slot = 0
@@ -182,6 +192,9 @@ class OsuClient:
             access_token=token["access_token"],
         )
         client.session.mount("https://", TimeoutAdapter(self.limiter))
+        query_fields = score_query_log.get()
+        if query_fields is not None:
+            query_fields["token_refreshed"] = True
         logger.info(
             "oauth_token_ready",
             extra={
@@ -206,7 +219,8 @@ class OsuClient:
         client_id: int | None = None,
         client_secret: str | None = None,
     ) -> ScoresResponse:
-        if client_id is None and client_secret is None:
+        custom_credentials = client_id is not None or client_secret is not None
+        if not custom_credentials:
             # The route serializes cache misses; custom credentials do not advance rotation.
             self._slot = self._next_slot
             self._next_slot = (self._next_slot + 1) % len(self._tokens)
@@ -221,9 +235,23 @@ class OsuClient:
                 and time.monotonic() < self.expires_at
             )
             needed = 2 if has_cached_token else 3
+            api_slot = (
+                self._api_slots[self._slot] if not custom_credentials and self._api_slots else None
+            )
+            query_fields = score_query_log.get()
+            if query_fields is not None:
+                query_fields["api_slot"] = api_slot
             logger.info(
                 "osu_query_started",
-                extra={"fields": {"mode": mode or "auto", "required_requests": needed}},
+                extra={
+                    "fields": {
+                        "query": username,
+                        "credentials": "custom" if custom_credentials else "site",
+                        "api_slot": api_slot,
+                        "mode": mode or "auto",
+                        "required_requests": needed,
+                    }
+                },
             )
             self.limiter.ensure_capacity(needed)
             api = (
@@ -240,6 +268,8 @@ class OsuClient:
                     ) from None
                 raise
             mode = GameMode(mode or user.playmode).value
+            if query_fields is not None:
+                query_fields.update(username=user.username, user_id=user.id, mode=mode)
             logger.info("osu_mode_resolved", extra={"fields": {"mode": mode}})
             scores = api.user_scores(
                 user.id, ScoreType.BEST, mode=GameMode(mode), limit=50, include_fails=False

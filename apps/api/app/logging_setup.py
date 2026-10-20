@@ -6,6 +6,8 @@ from pathlib import Path
 from traceback import walk_tb
 
 request_id: ContextVar[str | None] = ContextVar("request_id", default=None)
+# A per-request mutable record shared with the synchronous route's worker thread.
+score_query_log: ContextVar[dict | None] = ContextVar("score_query_log", default=None)
 
 EVENT_MESSAGES = {
     "api_started": "API started with the configured request limits and cache settings",
@@ -15,6 +17,7 @@ EVENT_MESSAGES = {
     "request_failed": "Unexpected application error; see the safe code locations",
     "request_rejected": "Request could not be fulfilled",
     "scores_query_started": "Score query started",
+    "scores_query_completed": "Score query completed",
     "scores_cache_lookup": "Score cache checked; MISS may require a fresh osu! lookup",
     "scores_cache_invalid": "Cached scores are invalid; fresh scores will be requested",
     "negative_cache_hit": "A recent lookup already confirmed that this player does not exist",
@@ -153,6 +156,8 @@ def record_data(record: logging.LogRecord) -> dict:
     data.update(getattr(record, "fields", {}))
     if event == "request_completed" and data.get("status", 200) >= 400:
         data["message"] = "Request completed with an error"
+    if event == "scores_query_completed" and data.get("status", 200) >= 400:
+        data["message"] = "Score query completed with an error"
     if event == "osu_http_completed" and data.get("status", 200) >= 400:
         data["message"] = "osu! HTTP request was rejected"
         if data.get("phase") == "oauth" and data["status"] in (400, 401):
