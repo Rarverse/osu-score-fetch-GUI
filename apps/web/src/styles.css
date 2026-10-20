@@ -212,7 +212,7 @@ main {
 .hero {
   position: relative;
   text-align: center;
-  padding: 70px 0 42px;
+  padding: 70px 0 24px;
 }
 .live-dot {
   display: inline-block;
@@ -234,7 +234,7 @@ main {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   max-width: 690px;
-  margin: 33px auto 0;
+  margin: 24px auto 0;
   background: #191a22;
   border: 1px solid #34333f;
   border-radius: 12px;
@@ -348,7 +348,14 @@ main {
   text-decoration: underline;
 }
 .custom-copy p + p {
-  margin-top: 10px;
+  margin-top: 16px;
+}
+.hero-description > p + p {
+  color: #8f8c9b;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.7;
+  letter-spacing: 0;
 }
 @media (max-width: 600px) {
   .search-options {
@@ -385,14 +392,14 @@ main {
   gap: 9px;
   color: #aaa7b5;
   font-size: 12px;
-  margin-top: 28px;
+  margin-top: 24px;
 }
 .search-note svg {
   color: #b09ccf;
 }
 .api-credentials {
   max-width: 690px;
-  margin: 16px auto 0;
+  margin: 24px auto 0;
   text-align: left;
   color: #a5a3af;
   font-size: 12px;
@@ -1003,13 +1010,12 @@ footer a:hover {
     font-size: 12px;
   }
   .hero {
-    padding: 44px 0 30px;
+    padding: 44px 0 24px;
   }
   .hero-description {
     font-size: 16px;
   }
   .search-panel {
-    margin-top: 25px;
     padding: 6px;
     grid-template-columns: minmax(0, 1fr) auto;
   }
