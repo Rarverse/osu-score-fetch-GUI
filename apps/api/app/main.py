@@ -38,9 +38,7 @@ async def lifespan(app: FastAPI):
                 "negative_cache_ttl": app.state.settings.negative_cache_ttl,
                 "log_format": app.state.settings.log_format,
                 "log_level": app.state.settings.log_level,
-                "site_credentials_configured": bool(
-                    app.state.settings.osu_client_id and app.state.settings.osu_client_secret
-                ),
+                "site_credentials_configured": bool(app.state.settings.osu_credentials),
             }
         },
     )
@@ -57,7 +55,7 @@ async def lifespan(app: FastAPI):
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or Settings()
     configure_logging(settings.log_format, settings.log_level)
-    app = FastAPI(title="Rarsu查分器 API", version="1.0.0", lifespan=lifespan)
+    app = FastAPI(title="Raru 查分器 API", version="1.0.0", lifespan=lifespan)
     app.state.settings = settings
     app.state.cache = JsonCache(
         settings.cache_path, settings.cache_timeout, settings.cache_retention

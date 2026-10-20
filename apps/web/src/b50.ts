@@ -147,7 +147,7 @@ export async function renderBestScores(
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   // Centre both labels on the same header row, regardless of their font sizes.
   ctx.textBaseline = "middle";
-  text("RARVERSE  /  RARSU", 40, 38, 20, "#c9b2ff");
+  text("Raru Score Fetcher", 40, 38, 20, "#c9b2ff");
   ctx.textAlign = "right";
   text(`BEST ${limit}`, canvas.width - 40, 38, 34, "#c9b2ff");
   ctx.textAlign = "left";
@@ -158,6 +158,14 @@ export async function renderBestScores(
     `${modeLabels[data.mode]}  ·  ${data.player.country}  ·  #${data.player.user_id}`,
     180,
     160,
+    21,
+    "#a49bb4",
+  );
+  const playTime = data.player.play_time;
+  text(
+    `${t("playTime")}  ${playTime == null ? "—" : `${Math.floor(playTime / 3600)}h ${Math.floor((playTime % 3600) / 60)}m`}`,
+    180,
+    196,
     21,
     "#a49bb4",
   );

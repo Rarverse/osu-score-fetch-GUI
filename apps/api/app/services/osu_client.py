@@ -1,5 +1,6 @@
 import logging
 import time
+from dataclasses import dataclass
 from datetime import UTC, datetime
 
 import requests
@@ -104,12 +105,36 @@ def structure_scores(scores) -> list[Score]:
     return result
 
 
+@dataclass
+class SiteToken:
+    client: Ossapi | None = None
+    expires_at: float = 0.0
+
+
 class OsuClient:
     def __init__(self, settings: Settings):
         self.settings = settings
-        self.client: Ossapi | None = None
-        self.expires_at = 0.0
+        self.credentials = settings.osu_credentials
+        self._tokens = [SiteToken() for _ in range(max(1, len(self.credentials)))]
+        self._slot = 0
+        self._next_slot = 0
         self.limiter = UpstreamLimiter(settings.osu_requests_per_minute)
+
+    @property
+    def client(self):
+        return self._tokens[self._slot].client
+
+    @client.setter
+    def client(self, value):
+        self._tokens[self._slot].client = value
+
+    @property
+    def expires_at(self):
+        return self._tokens[self._slot].expires_at
+
+    @expires_at.setter
+    def expires_at(self, value):
+        self._tokens[self._slot].expires_at = value
 
     def get_ossapi_client(
         self, client_id: int | None = None, client_secret: str | None = None
@@ -121,10 +146,14 @@ class OsuClient:
                 extra={"fields": {"expires_in_seconds": int(self.expires_at - time.monotonic())}},
             )
             return self.client
-        configured_secret = self.settings.osu_client_secret
-        resolved_client_id = client_id or self.settings.osu_client_id
-        resolved_secret = client_secret or (
-            configured_secret.get_secret_value() if configured_secret else None
+        configured_id, configured_secret = (
+            self.credentials[self._slot] if self.credentials else (None, None)
+        )
+        resolved_client_id = client_id if custom_credentials else configured_id
+        resolved_secret = (
+            client_secret
+            if custom_credentials
+            else (configured_secret.get_secret_value() if configured_secret else None)
         )
         if not resolved_client_id or not resolved_secret:
             raise ServiceError(503, "NOT_CONFIGURED", "服务端尚未配置 osu! OAuth 凭据。")
@@ -177,6 +206,10 @@ class OsuClient:
         client_id: int | None = None,
         client_secret: str | None = None,
     ) -> ScoresResponse:
+        if client_id is None and client_secret is None:
+            # The route serializes cache misses; custom credentials do not advance rotation.
+            self._slot = self._next_slot
+            self._next_slot = (self._next_slot + 1) % len(self._tokens)
         api = None
         started = time.perf_counter()
         try:
@@ -222,6 +255,7 @@ class OsuClient:
                     pp=stats.pp if stats else None,
                     global_rank=stats.global_rank if stats else None,
                     hit_accuracy=stats.hit_accuracy if stats else None,
+                    play_time=getattr(stats, "play_time", None),
                 ),
                 scores=structure_scores(scores),
                 fetched_at=datetime.now(UTC),

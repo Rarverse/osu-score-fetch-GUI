@@ -1,9 +1,9 @@
 const zh = {
-  appName: "Rarsu查分器",
-  home: "Rarsu查分器首页",
+  appName: "Raru 查分器",
+  home: "Raru 查分器首页",
   pageScroll: "页面滚动条",
   description:
-    "Rarsu查分器：输入 osu! 用户名，直接看 TA 的 Top 20/50 成绩。四个模式都能查，不用登录。",
+    "Raru 查分器：输入 osu! 用户名，直接看 TA 的 Top 20/50 成绩。四个模式都能查，不用登录。",
   visitOsu: "访问 osu!",
   playerLabel: "玩家用户名或 ID",
   playerPlaceholder: "输入玩家用户名或 ID",
@@ -50,6 +50,7 @@ const zh = {
   loadingMode: "正在获取 {mode} best performance…",
   playerScores: "玩家成绩",
   performance: "表现分",
+  playTime: "游玩时长",
   globalRank: "全球排名",
   accuracy: "准确率",
   scoreCount: "{count} 条成绩",
@@ -99,11 +100,11 @@ const zh = {
 type MessageKey = keyof typeof zh;
 
 const en: Record<MessageKey, string> = {
-  appName: "Rarsu Score Checker",
-  home: "Rarsu Score Checker home",
+  appName: "Raru Score Fetcher",
+  home: "Raru Score Fetcher home",
   pageScroll: "Page scrollbar",
   description:
-    "Rarsu Score Checker: type an osu! username and see their top 20/50 plays. Works for all four modes, no login needed.",
+    "Raru Score Fetcher: type an osu! username and see their top 20/50 plays. Works for all four modes, no login needed.",
   visitOsu: "Visit osu!",
   playerLabel: "Player username or ID",
   playerPlaceholder: "Enter a player username or ID",
@@ -152,6 +153,7 @@ const en: Record<MessageKey, string> = {
   loadingMode: "Fetching {mode} best performance…",
   playerScores: "Player scores",
   performance: "Performance",
+  playTime: "Play time",
   globalRank: "Global rank",
   accuracy: "Accuracy",
   scoreCount: "{count} scores",

@@ -15,6 +15,8 @@ class Player(BaseModel):
     global_rank: int | None
     hit_accuracy: float | None  # Percentage, 0–100 (user statistics).
 
+    play_time: int | None = Field(default=None, ge=0)  # Total seconds in this ruleset.
+
 
 class Score(BaseModel):
     score_id: int | None

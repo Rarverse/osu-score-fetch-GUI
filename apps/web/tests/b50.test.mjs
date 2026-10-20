@@ -195,7 +195,7 @@ test("brand and BEST label share the same vertical centre with balanced margins"
   const renderer = loadRenderer();
   await renderer.renderBestScores(fixture(1), 20);
   const brand = renderer.labels.find(
-    ({ value }) => value === "RARVERSE  /  RARSU",
+    ({ value }) => value === "Raru Score Fetcher",
   );
   const best = renderer.labels.find(({ value }) => value === "BEST 20");
   assert.equal(brand.y, best.y);
@@ -266,3 +266,25 @@ test("failed artwork blocks an incomplete export and a later attempt can retry",
     "image/png",
   );
 });
+
+for (const [seconds, expected] of [
+  [7265, "2h 1m"],
+  [0, "0h 0m"],
+  [null, "—"],
+  [undefined, "—"],
+]) {
+  test(`play time renders above rank for ${seconds}`, async () => {
+    const renderer = loadRenderer();
+    const data = fixture(1);
+    data.player.play_time = seconds;
+    await renderer.renderBestScores(data, 20);
+    const time = renderer.labels.find(
+      ({ value }) => value === `playTime  ${expected}`,
+    );
+    const rank = renderer.labels.find(({ value }) =>
+      value.includes("globalRank"),
+    );
+    assert.ok(time);
+    assert.ok(time.y > 160 && time.y < rank.y);
+  });
+}

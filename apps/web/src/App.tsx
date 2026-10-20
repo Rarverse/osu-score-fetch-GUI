@@ -2,7 +2,6 @@ import {
   ArrowUpRight,
   Check,
   ChevronRight,
-  Circle,
   CircleAlert,
   Command,
   Download,
@@ -17,6 +16,7 @@ import {
 } from "lucide-react";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import Markdown from "react-markdown";
+import { version } from "../package.json";
 import { ApiError, getScores, waitForRetry } from "./api";
 import { type ExportProgress, renderBestScores, saveBestScores } from "./b50";
 import introEn from "./content/intro.en.md?raw";
@@ -24,6 +24,7 @@ import intro from "./content/intro.md?raw";
 import { language, locale, t } from "./i18n";
 import ModeIcon from "./ModeIcon";
 import PageScrollbar from "./PageScrollbar";
+import RhythmBackground from "./RhythmBackground";
 import {
   gradeLabel,
   gradeTitle,
@@ -127,6 +128,7 @@ function ScoreRow({ score, position }: { score: Score; position: number }) {
 export default function App() {
   const [username, setUsername] = useState("");
   const [apiExpanded, setApiExpanded] = useState(false);
+  const [instructionsExpanded, setInstructionsExpanded] = useState(false);
   const [useOwnApi, setUseOwnApi] = useState(false);
   const [apiClientId, setApiClientId] = useState("");
   const [apiClientSecret, setApiClientSecret] = useState("");
@@ -327,6 +329,7 @@ export default function App() {
         </a>
       </header>
       <main>
+        <RhythmBackground />
         <section className="hero" aria-labelledby="page-title">
           <h1 id="page-title" className="sr-only">
             {t("query")}
@@ -714,32 +717,32 @@ export default function App() {
           </section>
         )}
         {!result && !loading && !error && (
-          <section className="start-panel" aria-label={t("instructions")}>
-            <Search size={28} aria-hidden="true" />
-            <h2>{t("instructions")}</h2>
-            <ol className="usage-steps">
-              <li>{t("startTitle")}</li>
-              <li>{t("startDescription")}</li>
-              <li>{t("downloadInstructions")}</li>
-            </ol>
+          <section className="start-panel">
+            <button
+              className="instructions-trigger"
+              type="button"
+              aria-expanded={instructionsExpanded}
+              aria-controls="search-instructions"
+              onClick={() => setInstructionsExpanded(!instructionsExpanded)}
+            >
+              <ChevronRight size={14} aria-hidden="true" />
+              {t("instructions")}
+            </button>
+            <div
+              id="search-instructions"
+              className="instructions-panel"
+              aria-hidden={!instructionsExpanded}
+            >
+              <div className="instructions-body">
+                <ol className="usage-steps">
+                  <li>{t("startTitle")}</li>
+                  <li>{t("startDescription")}</li>
+                  <li>{t("downloadInstructions")}</li>
+                </ol>
+              </div>
+            </div>
           </section>
         )}
-        <div className="feature-strip">
-          <div>
-            <Trophy size={17} />
-            <span>{t("bestPerformance")}</span>
-          </div>
-          <div>
-            <Star size={17} />
-            <span>{t("keyStats")}</span>
-            <small>pp · Accuracy · SR</small>
-          </div>
-          <div>
-            <Circle size={17} />
-            <span>{t("fourModes")}</span>
-            <small>osu! · taiko · catch · mania</small>
-          </div>
-        </div>
       </main>
       <footer>
         <div>
@@ -753,7 +756,9 @@ export default function App() {
             Rarverse
           </a>
         </div>
-        <p>{t("unofficial")}</p>
+        <p>
+          {t("unofficial")} · v{version}
+        </p>
         {/* Temporarily hide private repo link until public
         <a
           href="https://github.com/Rarverse/osu-score-fetch-GUI"

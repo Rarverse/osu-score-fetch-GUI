@@ -16,6 +16,7 @@ export interface Player {
   pp: number | null;
   global_rank: number | null;
   hit_accuracy: number | null;
+  play_time?: number | null;
 }
 
 export interface Score {
