@@ -728,14 +728,6 @@ export default function App() {
             </button>
           </section>
         )}
-        {loading && !result && (
-          <div className="results-skeleton" aria-hidden="true">
-            <div className="skeleton-player" />
-            {[0, 1, 2].map((row) => (
-              <div className="skeleton-row" key={row} />
-            ))}
-          </div>
-        )}
         {result && (
           <section
             className="results"

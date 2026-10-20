@@ -742,6 +742,9 @@ footer a:hover {
   color: #dbc6ff;
   font-size: 29px;
 }
+.results {
+  padding-bottom: 32px;
+}
 .results-heading {
   display: flex;
   align-items: center;
@@ -1453,25 +1456,6 @@ footer a:hover {
 }
 .player-card {
   animation: panel-appear 180ms ease-out;
-}
-.results-skeleton {
-  display: grid;
-  gap: 12px;
-  padding: 20px 0;
-}
-.skeleton-player,
-.skeleton-row {
-  border-radius: 12px;
-  background: #25232f;
-}
-.skeleton-player {
-  height: 120px;
-}
-.skeleton-row {
-  height: 95px;
-}
-.export-feedback {
-  min-height: 100px;
 }
 .export-preview {
   margin-bottom: 20px;
