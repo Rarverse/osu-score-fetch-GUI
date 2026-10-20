@@ -258,3 +258,7 @@ Copyright © 2026 Rarverse.
 本项目以 [GNU AGPLv3（AGPL-3.0-only）](LICENSE) 发布，允许使用、修改和商用。分发修改版时须遵守 AGPLv3 的源码提供要求；修改后通过网络提供服务时，也须向使用该服务的用户提供对应源码的获取方式。
 
 核心依赖 [ossapi](https://github.com/liam-devoe/ossapi) 使用 AGPLv3。第三方依赖、osu! 数据、头像与谱面曲绘仍适用各自的许可或使用条款。
+
+## Publicity Community
+
+[LINUX DO](https://linux.do/)
