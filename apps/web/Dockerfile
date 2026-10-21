@@ -16,7 +16,7 @@ ENV VITE_SITE_URL=${VITE_SITE_URL}
 RUN npm run build --workspace apps/web
 
 # nginx:1.30.6-alpine, multi-arch index digest
-FROM nginx:1.30.6-alpine@sha256:970364228b1e4f932abc22d321932816782cca8a20b85a77552a7cfe9acfb3b5
+FROM nginx:1.31.7-alpine@sha256:892bb2152464f0c5d8972593a5f5afaf8054552580b699d95f8ff4af08c2d33d
 
 COPY deploy/nginx.conf /etc/nginx/conf.d/default.conf
 COPY deploy/15-trusted-proxies.sh /docker-entrypoint.d/15-trusted-proxies.sh
