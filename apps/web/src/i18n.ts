@@ -38,7 +38,6 @@ const zh = {
   downloadReady: "图片已生成",
   downloadBrowser: "已交给浏览器下载，请查看下载列表。",
   downloadFailed: "图片下载失败，请稍后重试。",
-  artworkFailed: "头像或曲绘加载失败，请稍后重试下载。",
   bestPerformance: "最佳表现",
   noLogin: "无需登录",
   publicScores: "公开成绩",
@@ -154,8 +153,6 @@ const en: Record<MessageKey, string> = {
   downloadReady: "Image generated",
   downloadBrowser: "The image was sent to your browser. Check your downloads.",
   downloadFailed: "Image download failed. Please try again.",
-  artworkFailed:
-    "Unable to load an avatar or cover. Please try downloading again.",
   bestPerformance: "Best performance",
   noLogin: "No sign-in required",
   publicScores: "Public scores",

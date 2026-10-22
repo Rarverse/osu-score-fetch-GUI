@@ -24,14 +24,14 @@ export interface ExportProgress {
 // Same-origin cached artwork keeps the canvas exportable without upstream CORS.
 function loadImage(url: string | null): Promise<HTMLImageElement | null> {
   if (!url) return Promise.resolve(null);
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     const image = new Image();
     const finish = (loaded: boolean) => {
       clearTimeout(timer);
       image.onload = null;
       image.onerror = null;
-      if (loaded) resolve(image);
-      else reject(new Error(t("artworkFailed")));
+      // Missing or unavailable artwork must not prevent exporting the scores.
+      resolve(loaded ? image : null);
     };
     // Allow for server-side pacing and reuse the page's same-origin image cache.
     const timer = setTimeout(() => finish(false), 90_000);
@@ -54,23 +54,16 @@ export async function renderBestScores(
   const urls = [...new Set(sources.filter((url): url is string => !!url))];
   const loaded = new Map<string, HTMLImageElement | null>();
   let next = 0;
-  let failed = false;
   onProgress?.({ stage: "images", completed: 0, total: urls.length });
   const worker = async () => {
-    while (!failed && next < urls.length) {
+    while (next < urls.length) {
       const url = urls[next++];
-      try {
-        loaded.set(url, await loadImage(url));
-      } catch (error) {
-        failed = true;
-        throw error;
-      }
-      if (!failed)
-        onProgress?.({
-          stage: "images",
-          completed: loaded.size,
-          total: urls.length,
-        });
+      loaded.set(url, await loadImage(url));
+      onProgress?.({
+        stage: "images",
+        completed: loaded.size,
+        total: urls.length,
+      });
     }
   };
   // Avoid creating 51 competing requests, and load repeated covers only once.

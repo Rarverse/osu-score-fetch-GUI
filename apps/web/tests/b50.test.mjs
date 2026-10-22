@@ -86,7 +86,8 @@ function loadRenderer({ failImages = false } = {}) {
         maxActiveImages = Math.max(maxActiveImages, activeImages);
         queueMicrotask(() => {
           activeImages--;
-          if (failImages) this.onerror?.();
+          if (typeof failImages === "function" ? failImages(value) : failImages)
+            this.onerror?.();
           else this.onload?.();
         });
       }
@@ -253,19 +254,56 @@ test("fewer scores preserve the requested B50 title without adding empty rows", 
   assert.ok(renderer.labels.some(({ value }) => value === "BEST 50"));
 });
 
-test("failed artwork blocks an incomplete export and a later attempt can retry", async () => {
+test("unavailable artwork uses placeholders and still downloads", async () => {
   const renderer = loadRenderer({ failImages: true });
-  await assert.rejects(
-    renderer.renderBestScores(fixture(1), 20),
-    /artworkFailed/,
-  );
-  assert.equal(renderer.downloads.length, 0);
-  const retry = loadRenderer();
-  assert.equal(
-    (await retry.renderBestScores(fixture(1), 20)).type,
-    "image/png",
-  );
+  const data = fixture(1);
+  const blob = await renderer.renderBestScores(data, 20);
+  assert.equal(blob.type, "image/png");
+  assert.equal(renderer.drawings.length, 0);
+  assert.equal(renderer.labels.filter(({ value }) => value === "♪").length, 2);
+  renderer.saveBestScores(blob, data, 20);
+  assert.equal(renderer.downloads.length, 1);
 });
+
+for (const limit of [20, 50]) {
+  test(`B${limit} continues past missing covers and preserves scores and progress`, async () => {
+    const missing = "https://assets.ppy.sh/beatmaps/314/covers/list@2x.jpg";
+    const renderer = loadRenderer({
+      failImages: (url) => url.includes(encodeURIComponent(missing)),
+    });
+    const data = fixture(limit);
+    data.scores[0].cover_url = missing;
+    data.scores[1].cover_url = missing;
+    data.scores[2].cover_url = null;
+    const progress = [];
+    const blob = await renderer.renderBestScores(data, limit, (value) =>
+      progress.push(value),
+    );
+    assert.equal(blob.type, "image/png");
+    assert.equal(renderer.drawings.length, limit - 2);
+    assert.equal(
+      renderer.labels.filter(({ value }) => value === "♪").length,
+      3,
+    );
+    assert.equal(
+      renderer.labels.filter(({ value }) => value.startsWith("Song ")).length,
+      limit,
+    );
+    assert.equal(renderer.imageSources.length, 3);
+    assert.deepEqual(
+      progress.map(({ stage, completed, total }) => [stage, completed, total]),
+      [
+        ["images", 0, 3],
+        ["images", 1, 3],
+        ["images", 2, 3],
+        ["images", 3, 3],
+        ["rendering", 3, 3],
+      ],
+    );
+    renderer.saveBestScores(blob, data, limit);
+    assert.equal(renderer.downloads.length, 1);
+  });
+}
 
 for (const [seconds, expected] of [
   [7265, "2h 1m"],

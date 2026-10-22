@@ -16,7 +16,7 @@ React + TypeScript + Vite · FastAPI + ossapi · Nginx · Docker Compose
 - **中英文与移动端**：按浏览器语言选择中文或英文，提供响应式布局、键盘菜单操作与减少动态效果支持。
 - **可自托管**：无需玩家登录；支持共享的服务端 OAuth 凭据，也可由访客临时提供个人凭据。
 
-当前版本 **v0.1.2**，页脚版本号读取 `apps/web/package.json`。
+当前版本 **v0.1.3**，页脚版本号读取 `apps/web/package.json`。
 
 仅查询 `best` 成绩，最多 50 条。SR 为未应用 mods 的谱面基础难度，pp 使用 osu! 返回值。相同玩家、相同模式的成绩默认复用 3 分钟，缓存到期后再次查询才会刷新；期间可以继续查询其他玩家。
 
