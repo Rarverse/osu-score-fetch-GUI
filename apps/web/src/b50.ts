@@ -153,10 +153,45 @@ export async function renderBestScores(
     canvas.width,
     canvas.height,
   );
-  background.addColorStop(0, "#241633");
-  background.addColorStop(1, "#101e38");
+  background.addColorStop(0, "#15121f");
+  background.addColorStop(1, "#101723");
   ctx.fillStyle = background;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
+  // Jitter within each cell keeps the texture scattered without dense clusters.
+  const shapes = [
+    { path: new Path2D("M-1 0a1 1 0 1 0 2 0a1 1 0 1 0-2 0"), color: "#d8a6be" },
+    { path: new Path2D("M-1 -1H1V1H-1Z"), color: "#b9a2d6" },
+    { path: new Path2D("M0 -1 1 0.8H-1Z"), color: "#9fcaba" },
+    {
+      path: new Path2D(
+        "M0 -1 .2245 -.309 .9511 -.309 .3633 .118 .5878 .809 0 .382 -.5878 .809 -.3633 .118 -.9511 -.309 -.2245 -.309Z",
+      ),
+      color: "#9fb7d6",
+    },
+  ];
+  for (let row = 0; row * 88 < canvas.height; row++) {
+    for (let column = 0; column * 96 < canvas.width; column++) {
+      const shape = shapes[Math.floor(Math.random() * shapes.length)];
+      const size = 12 + Math.random() * 6;
+      ctx.save();
+      ctx.translate(
+        column * 96 + 20 + Math.random() * 56,
+        row * 88 + 20 + Math.random() * 48,
+      );
+      ctx.rotate(Math.random() * Math.PI * 2);
+      ctx.scale(size, size);
+      const halo = ctx.createRadialGradient(0, 0, 0, 0, 0, 1.8);
+      halo.addColorStop(0, `${shape.color}20`);
+      halo.addColorStop(1, `${shape.color}00`);
+      ctx.fillStyle = halo;
+      ctx.fillRect(-1.8, -1.8, 3.6, 3.6);
+      ctx.filter = "blur(0.8px)";
+      ctx.strokeStyle = `${shape.color}34`;
+      ctx.lineWidth = 2 / size;
+      ctx.stroke(shape.path);
+      ctx.restore();
+    }
+  }
   ctx.textBaseline = "middle";
   text("Raru Score Fetcher", 40, 42, 22, "#c9b2ff");
   ctx.textAlign = "right";

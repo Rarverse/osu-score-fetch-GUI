@@ -48,9 +48,12 @@ function loadRenderer({ failImages = false } = {}) {
     "restore",
     "fill",
     "stroke",
+    "translate",
+    "rotate",
+    "scale",
   ])
     context[method] = () => {};
-  context.createLinearGradient = () => ({
+  context.createRadialGradient = context.createLinearGradient = () => ({
     addColorStop() {},
   });
   const canvas = {
@@ -81,6 +84,7 @@ function loadRenderer({ failImages = false } = {}) {
       if (name === "./i18n") return { locale: "en-US", t: (key) => key };
       throw new Error(`Unexpected module: ${name}`);
     },
+    Path2D: class {},
     Image: class {
       naturalWidth = 100;
       naturalHeight = 100;
