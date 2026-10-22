@@ -9,11 +9,11 @@ const paths = {
   diamond: "m12 2 9 10-9 10L3 12Z",
 };
 const colors = ["#c9b2ff", "#b6cde5", "#dbb8d0"];
-const sparkIds = Array.from({ length: 20 }, (_, index) => index);
+const sparkIds = Array.from({ length: 32 }, (_, index) => index);
 const placement = (container: HTMLElement) => ({
   x: random(16, Math.max(16, container.clientWidth - 16)),
   y: random(24, Math.max(24, container.clientHeight - 24)),
-  size: random(8, 22),
+  size: random(14, 32),
   shape: shapes[Math.floor(Math.random() * shapes.length)],
   flash: Math.random() < 0.16,
   color: colors[Math.floor(Math.random() * colors.length)],
