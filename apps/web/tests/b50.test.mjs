@@ -47,8 +47,12 @@ function loadRenderer({ failImages = false } = {}) {
     "fillRect",
     "restore",
     "fill",
+    "stroke",
   ])
     context[method] = () => {};
+  context.createLinearGradient = () => ({
+    addColorStop() {},
+  });
   const canvas = {
     width: 0,
     height: 0,
@@ -157,7 +161,13 @@ for (const limit of [20, 50]) {
     const data = fixture(50);
     const blob = await renderer.renderBestScores(data, limit);
     assert.equal(blob.type, "image/png");
-    assert.equal(renderer.canvas.height, 370 + Math.ceil(limit / 2) * 136);
+    const titles = renderer.labels.filter(({ value }) =>
+      value.startsWith("Song "),
+    );
+    assert.equal(new Set(titles.map(({ x }) => x)).size, limit === 50 ? 5 : 2);
+    assert.equal(new Set(titles.map(({ y }) => y)).size, 10);
+    assert.ok(titles.at(-1).y < renderer.canvas.height - 100);
+    assert.ok(renderer.canvas.height / renderer.canvas.width < 1.5);
     assert.ok(renderer.labels.some(({ value }) => value === `BEST ${limit}`));
     assert.equal(
       renderer.labels.filter(({ value }) => value.startsWith("Song ")).length,
@@ -250,7 +260,10 @@ test("fewer scores preserve the requested B50 title without adding empty rows", 
   const renderer = loadRenderer();
   await renderer.renderBestScores(fixture(3), 50);
   assert.equal(renderer.drawings.length, 4);
-  assert.equal(renderer.canvas.height, 370 + 2 * 136);
+  const titles = renderer.labels.filter(({ value }) =>
+    value.startsWith("Song "),
+  );
+  assert.equal(new Set(titles.map(({ y }) => y)).size, 1);
   assert.ok(renderer.labels.some(({ value }) => value === "BEST 50"));
 });
 
@@ -311,7 +324,7 @@ for (const [seconds, expected] of [
   [null, "—"],
   [undefined, "—"],
 ]) {
-  test(`play time renders above rank for ${seconds}`, async () => {
+  test(`play time stays with player identity for ${seconds}`, async () => {
     const renderer = loadRenderer();
     const data = fixture(1);
     data.player.play_time = seconds;
@@ -319,10 +332,13 @@ for (const [seconds, expected] of [
     const time = renderer.labels.find(
       ({ value }) => value === `playTime  ${expected}`,
     );
-    const rank = renderer.labels.find(({ value }) =>
-      value.includes("globalRank"),
+    const identity = renderer.labels.find(({ value }) =>
+      value.startsWith("osu!mania"),
     );
+    const rank = renderer.labels.find(({ value }) => value === "globalRank");
     assert.ok(time);
-    assert.ok(time.y > 160 && time.y < rank.y);
+    assert.equal(time.x, identity.x);
+    assert.ok(time.y > identity.y);
+    assert.ok(time.x < rank.x);
   });
 }

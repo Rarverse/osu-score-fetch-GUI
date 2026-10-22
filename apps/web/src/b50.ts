@@ -75,8 +75,19 @@ export async function renderBestScores(
     total: urls.length,
   });
   const canvas = document.createElement("canvas");
-  canvas.width = 1600;
-  canvas.height = 370 + Math.ceil(scores.length / 2) * 136;
+  const columns = limit === 50 ? 5 : 2;
+  const cardWidth = 748;
+  const cardHeight = 140;
+  const gap = 24;
+  const headerScale = limit === 50 ? 1.5 : 1;
+  const panelTop = 84;
+  const panelHeight = 228 * headerScale;
+  const panelBottom = panelTop + panelHeight;
+  const headerCenter = panelTop + panelHeight / 2;
+  const gridTop = panelBottom + 62;
+  const rowHeight = cardHeight + 16;
+  canvas.width = 80 + columns * cardWidth + (columns - 1) * gap;
+  canvas.height = gridTop + Math.ceil(scores.length / columns) * rowHeight + 64;
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error(t("downloadFailed"));
   const number = (value: number | null, digits = 2) =>
@@ -136,57 +147,133 @@ export async function renderBestScores(
     ctx.restore();
   };
 
-  ctx.fillStyle = "#101116";
+  const background = ctx.createLinearGradient(
+    0,
+    0,
+    canvas.width,
+    canvas.height,
+  );
+  background.addColorStop(0, "#241633");
+  background.addColorStop(1, "#101e38");
+  ctx.fillStyle = background;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-  // Centre both labels on the same header row, regardless of their font sizes.
   ctx.textBaseline = "middle";
-  text("Raru Score Fetcher", 40, 38, 20, "#c9b2ff");
+  text("Raru Score Fetcher", 40, 42, 22, "#c9b2ff");
   ctx.textAlign = "right";
-  text(`BEST ${limit}`, canvas.width - 40, 38, 34, "#c9b2ff");
+  text(`BEST ${limit}`, canvas.width - 40, 42, 34, "#c9b2ff");
   ctx.textAlign = "left";
   ctx.textBaseline = "alphabetic";
-  artwork(images[0], 40, 80, 112);
-  text(data.player.username, 180, 120, 36, "#f1eff7", 1130);
+
+  const panel = ctx.createLinearGradient(
+    40,
+    panelTop,
+    canvas.width - 40,
+    panelBottom,
+  );
+  panel.addColorStop(0, "#30283ee8");
+  panel.addColorStop(1, "#191a23e8");
+  ctx.fillStyle = panel;
+  ctx.strokeStyle = "#ac8ed140";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.roundRect(40, panelTop, canvas.width - 80, panelHeight, 24);
+  ctx.fill();
+  ctx.stroke();
+  const avatarSize = 112 * headerScale;
+  const identityLeft = 72 + avatarSize + 24 * headerScale;
+  const contentWidth = canvas.width - 144;
+  const statsLeft = 72 + contentWidth * 0.4;
+  const identityWidth = statsLeft - identityLeft - 32;
+  artwork(images[0], 72, headerCenter - avatarSize / 2, avatarSize);
+  ctx.textBaseline = "middle";
+  text(
+    data.player.username,
+    identityLeft,
+    headerCenter - 40 * headerScale,
+    36 * headerScale,
+    "#f1eff7",
+    identityWidth,
+  );
   text(
     `${modeLabels[data.mode]}  ·  ${data.player.country}  ·  #${data.player.user_id}`,
-    180,
-    160,
-    21,
+    identityLeft,
+    headerCenter + 4 * headerScale,
+    20 * headerScale,
     "#a49bb4",
+    identityWidth,
   );
   const playTime = data.player.play_time;
   text(
     `${t("playTime")}  ${playTime == null ? "—" : `${Math.floor(playTime / 3600)}h ${Math.floor((playTime % 3600) / 60)}m`}`,
-    180,
-    196,
-    21,
+    identityLeft,
+    headerCenter + 44 * headerScale,
+    19 * headerScale,
+    "#a49bb4",
+    identityWidth,
+  );
+  const stats = [
+    [t("performance"), `${number(data.player.pp)} pp`],
+    [
+      t("globalRank"),
+      data.player.global_rank === null
+        ? "—"
+        : `#${number(data.player.global_rank, 0)}`,
+    ],
+    [t("accuracy"), `${number(data.player.hit_accuracy)}%`],
+  ];
+  const statWidth = (canvas.width - 72 - statsLeft) / stats.length;
+  stats.forEach(([label, value], index) => {
+    const x = statsLeft + (index + 0.5) * statWidth;
+    ctx.textAlign = "center";
+    text(
+      label,
+      x,
+      headerCenter - 24 * headerScale,
+      18 * headerScale,
+      "#a49bb4",
+      statWidth - 32,
+    );
+    text(
+      value,
+      x,
+      headerCenter + 20 * headerScale,
+      28 * headerScale,
+      index === 0 ? "#dbc6ff" : "#f1eff7",
+      statWidth - 32,
+    );
+  });
+  ctx.textAlign = "left";
+  ctx.textBaseline = "alphabetic";
+  text(t("bestPerformance"), 40, gridTop - 24, 22);
+  ctx.textAlign = "right";
+  text(
+    t("scoreCount", { count: scores.length }),
+    canvas.width - 40,
+    gridTop - 24,
+    18,
     "#a49bb4",
   );
-  text(
-    `${number(data.player.pp)} pp   /   ${t("globalRank")} ${data.player.global_rank === null ? "—" : `#${number(data.player.global_rank, 0)}`}   /   ${number(data.player.hit_accuracy)}%`,
-    40,
-    238,
-    26,
-  );
-  text(t("scoreCount", { count: scores.length }), 40, 278, 19, "#a49bb4");
+  ctx.textAlign = "left";
 
   scores.forEach((score, index) => {
-    const x = 40 + (index % 2) * 772;
-    const y = 300 + Math.floor(index / 2) * 136;
-    ctx.fillStyle = "#1c1b25";
+    const x = 40 + (index % columns) * (cardWidth + gap);
+    const y = gridTop + Math.floor(index / columns) * rowHeight;
+    ctx.fillStyle = "#1c1b25ed";
     ctx.beginPath();
-    ctx.roundRect(x, y, 748, 122, 14);
+    ctx.roundRect(x, y, cardWidth, cardHeight, 16);
     ctx.fill();
-    artwork(images[index + 1], x + 12, y + 12, 98);
-    text(String(index + 1).padStart(2, "0"), x + 120, y + 29, 17, "#c9b2ff");
-    text(score.beatmap_title, x + 155, y + 30, 21, "#f1eff7", 420);
+    ctx.strokeStyle = "#ffffff10";
+    ctx.stroke();
+    artwork(images[index + 1], x + 14, y + 21, 98);
+    text(String(index + 1).padStart(2, "0"), x + 136, y + 32, 17, "#c9b2ff");
+    text(score.beatmap_title, x + 171, y + 32, 21, "#f1eff7", 404);
     text(
       `${score.artist} · ${score.version}`,
-      x + 120,
-      y + 56,
+      x + 136,
+      y + 61,
       16,
       "#a49bb4",
-      460,
+      444,
     );
     const stars = `${number(score.star_rating)}★`;
     ctx.font = "600 16px system-ui, sans-serif";
@@ -195,35 +282,44 @@ export async function renderBestScores(
     if (background) {
       ctx.fillStyle = background;
       ctx.beginPath();
-      ctx.roundRect(x + 116, y + 65, starWidth + 8, 22, 4);
+      ctx.roundRect(x + 132, y + 74, starWidth + 8, 22, 4);
       ctx.fill();
     }
-    text(stars, x + 120, y + 81, 16, starColor(score.star_rating));
+    text(stars, x + 136, y + 90, 16, starColor(score.star_rating));
     text(
       score.mods.join(" ") || "NM",
-      x + 130 + starWidth,
-      y + 81,
+      x + 146 + starWidth,
+      y + 90,
       16,
       "#c9b2ff",
-      450 - starWidth,
+      434 - starWidth,
     );
     text(
       `${number(score.accuracy * 100)}%  ·  ${number(score.max_combo, 0)}× combo`,
-      x + 120,
-      y + 106,
+      x + 136,
+      y + 120,
       17,
       "#d0cbd8",
-      460,
+      444,
     );
+    ctx.textAlign = "right";
     text(
       gradeLabel(score.rank),
-      x + 600,
-      y + 38,
-      22,
+      x + cardWidth - 18,
+      y + 44,
+      34,
       rankColors[score.rank] ?? "#d0cbd8",
       130,
     );
-    text(`${number(score.pp)} pp`, x + 590, y + 88, 22, "#c9b2ff", 146);
+    text(
+      `${number(score.pp)} pp`,
+      x + cardWidth - 18,
+      y + 114,
+      25,
+      "#c9b2ff",
+      146,
+    );
+    ctx.textAlign = "left";
   });
   text(t("srNote"), 40, canvas.height - 42, 16, "#a49bb4");
   text(

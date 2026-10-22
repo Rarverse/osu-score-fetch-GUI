@@ -376,7 +376,7 @@ main {
   .mode-tabs {
     flex: 1 0 100%;
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     width: 100%;
     margin-bottom: 5px;
   }
@@ -1032,7 +1032,7 @@ footer a:hover {
   }
   .search-panel {
     padding: 6px;
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr);
   }
   .search-input-wrap {
     min-width: 0;
@@ -1040,8 +1040,8 @@ footer a:hover {
     gap: 8px;
   }
   .search-input-wrap input {
-    font-size: 12px;
-    height: 43px;
+    font-size: 16px;
+    height: 44px;
   }
   .search-input-wrap kbd {
     display: none;
@@ -1050,6 +1050,8 @@ footer a:hover {
     width: 17px;
   }
   .search-button {
+    min-height: 44px;
+    margin-top: 6px;
     padding: 0 11px;
     font-size: 12px;
     gap: 6px;
@@ -1077,40 +1079,65 @@ footer a:hover {
     padding: 20px;
     gap: 18px;
   }
+  .player-identity {
+    gap: 12px;
+    width: 100%;
+  }
+  .player-identity > div {
+    min-width: 0;
+  }
+  .player-identity .avatar {
+    width: 52px;
+    height: 52px;
+    flex-shrink: 0;
+  }
   .player-identity h2 {
     font-size: 22px;
   }
+  .player-identity p {
+    line-height: 1.6;
+    overflow-wrap: anywhere;
+  }
   .player-stats {
-    gap: 0;
-    justify-content: space-between;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px 12px;
     padding-top: 16px;
   }
+  .player-stats > div:first-child {
+    grid-column: 1 / -1;
+  }
+  .player-stats > div:first-child strong {
+    font-size: 28px;
+  }
   .player-stats strong {
-    font-size: 20px;
+    font-size: clamp(18px, 5vw, 20px);
   }
   .player-stats span {
     font-size: 12px;
   }
   .score-row {
     display: grid;
-    grid-template-columns: 18px 46px 1fr auto;
+    grid-template-columns: 18px 46px minmax(0, 1fr) auto;
     gap: 9px;
     padding: 15px 11px;
   }
   .position {
     font-size: 12px;
-    grid-row: 1 / 3;
+    grid-row: 1;
   }
   .map-cover {
     width: 46px;
     height: 54px;
-    grid-row: 1 / 3;
+    grid-row: 1;
   }
   .map-info {
-    grid-column: 3;
-    grid-row: 1 / 3;
+    grid-column: 3 / -1;
+    grid-row: 1;
+    padding-right: 24px;
   }
   .map-title {
+    overflow-wrap: anywhere;
     font-size: 12px;
   }
   .map-title svg {
@@ -1118,7 +1145,6 @@ footer a:hover {
   }
   .map-info p {
     font-size: 12px;
-    max-width: 160px;
   }
   .grade {
     font-size: 12px;
@@ -1129,11 +1155,13 @@ footer a:hover {
     align-self: start;
   }
   .accuracy {
-    grid-column: 3;
-    grid-row: 3;
+    grid-column: 2 / 4;
+    grid-row: 2;
     text-align: left;
     flex-direction: row;
-    gap: 8px;
+    flex-wrap: wrap;
+    min-width: 0;
+    gap: 4px 8px;
     margin-top: 2px;
     align-items: center;
   }
@@ -1145,8 +1173,10 @@ footer a:hover {
   }
   .score-pp {
     grid-column: 4;
-    grid-row: 2 / 4;
-    width: 68px;
+    grid-row: 2;
+    width: auto;
+    flex-direction: row;
+    align-items: baseline;
     align-self: end;
     gap: 2px;
   }
@@ -1519,8 +1549,23 @@ footer a:hover {
   .search-input-wrap kbd {
     display: none;
   }
+  .recent-heading {
+    align-items: flex-start;
+    margin-bottom: 6px;
+  }
+  .recent-heading > button {
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
   .results-heading > div {
     flex-wrap: wrap;
+    gap: 8px;
+  }
+  .results-heading h2 {
+    flex-basis: calc(100% - 25px);
+  }
+  .results-heading > div > span {
+    margin-left: 0;
   }
   footer {
     padding-bottom: 90px;
