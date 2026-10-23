@@ -1718,14 +1718,30 @@ footer a:hover {
 .hero-description .osu-wordmark {
   display: inline-block;
   color: #ff86b5;
-  text-shadow: 0 0 2px #ffffff70;
+  text-shadow: 0 0 3px #ffffff80;
   transition: transform 180ms ease;
 }
 .hero-description .osu-wordmark:hover {
   transform: scale(1.12);
+  animation: osu-wordmark-beat 1.2s ease-out infinite;
+}
+@keyframes osu-wordmark-beat {
+  0%,
+  30%,
+  100% {
+    translate: 0 0;
+    scale: 1;
+  }
+  10% {
+    translate: 0 -1px;
+    scale: 1.035;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   .hero-description .osu-wordmark {
     transition: none;
+  }
+  .hero-description .osu-wordmark:hover {
+    animation: none;
   }
 }
