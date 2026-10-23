@@ -10,15 +10,50 @@ const paths = {
 };
 const colors = ["#c9b2ff", "#b6cde5", "#dbb8d0"];
 const sparkIds = Array.from({ length: 32 }, (_, index) => index);
-const placement = (container: HTMLElement) => ({
-  x: random(16, Math.max(16, container.clientWidth - 16)),
-  y: random(24, Math.max(24, container.clientHeight - 24)),
-  size: random(14, 32),
-  shape: shapes[Math.floor(Math.random() * shapes.length)],
-  flash: Math.random() < 0.16,
-  color: colors[Math.floor(Math.random() * colors.length)],
-  angle: random(-25, 25),
-});
+const textRegions = [
+  ".hero-description",
+  ".api-recommendation",
+  ".recent-heading",
+  ".api-credentials-trigger",
+  ".start-panel",
+  ".previous-result",
+  ".results-heading",
+  ".result-freshness",
+  ".result-footnote",
+].join(", ");
+
+const placement = (container: HTMLElement) => {
+  const x = random(16, Math.max(16, container.clientWidth - 16));
+  const y = random(24, Math.max(24, container.clientHeight - 24));
+  const size = random(14, 32);
+  const bounds = container.getBoundingClientRect();
+  const padding = size / 2 + 8;
+  // Measure on each pulse so wrapping and newly loaded results are respected.
+  const behindText = Array.from(
+    container.parentElement?.querySelectorAll(textRegions) ?? [],
+  ).some((element) => {
+    const rect = element.getBoundingClientRect();
+    return (
+      rect.width > 0 &&
+      rect.height > 0 &&
+      bounds.left + x + padding > rect.left &&
+      bounds.left + x - padding < rect.right &&
+      bounds.top + y + padding > rect.top &&
+      bounds.top + y - padding < rect.bottom
+    );
+  });
+  return {
+    x,
+    y,
+    size,
+    behindText,
+    skipped: behindText && Math.random() < 0.3,
+    shape: shapes[Math.floor(Math.random() * shapes.length)],
+    flash: !behindText && Math.random() < 0.16,
+    color: colors[Math.floor(Math.random() * colors.length)],
+    angle: random(-25, 25),
+  };
+};
 
 function Spark() {
   const [timing] = useState(() => ({
@@ -34,13 +69,13 @@ function Spark() {
   return (
     <span
       ref={element}
-      className={`rhythm-spark${point?.flash ? " rhythm-spark-flash" : ""}`}
+      className={`rhythm-spark${point?.flash ? " rhythm-spark-flash" : ""}${point?.behindText ? " rhythm-spark-subtle" : ""}`}
       style={{
         left: point?.x,
         top: point?.y,
         width: point?.size,
         height: point?.size,
-        visibility: point ? undefined : "hidden",
+        visibility: point && !point.skipped ? undefined : "hidden",
         color: point?.flash ? "#e3d8ff" : point?.color,
         animationDuration: `${timing.duration}s`,
         animationDelay: `${timing.delay}s`,

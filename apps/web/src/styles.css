@@ -143,6 +143,12 @@ h3 {
 .rhythm-spark-flash .rhythm-spark-shape {
   fill-opacity: 0.3;
 }
+.rhythm-spark-subtle {
+  filter: none;
+}
+.rhythm-spark-subtle .rhythm-spark-shape {
+  opacity: 0.25;
+}
 @keyframes spark-glimmer {
   0%,
   65%,
