@@ -229,3 +229,52 @@ for (const ttl of [30, 180]) {
     assert.equal(calls, 2);
   });
 }
+
+for (const ttl of [30, 600]) {
+  test(`refresh deadline preserves server TTL ${ttl} across browser cache hits`, async () => {
+    let now = 100_000;
+    const api = loadApi({
+      Date: { now: () => now },
+      fetch: async () =>
+        new Response(
+          JSON.stringify({
+            player: { username: "Player", user_id: 123 },
+            mode: "mania",
+            scores: [],
+          }),
+          { headers: { "X-Cache-TTL": String(ttl), "X-Cache": "HIT" } },
+        ),
+    });
+    const signal = new AbortController().signal;
+    const first = await api.getScores("Player", 20, "mania", signal);
+    assert.equal(first.refreshAt, now + ttl * 1000);
+    now += 10_000;
+    const cached = await api.getScores("123", 20, "mania", signal);
+    assert.equal(cached.cache, "MEMORY");
+    assert.equal(cached.refreshAt, first.refreshAt);
+  });
+}
+
+for (const ttl of [null, "", "invalid", "-1", "0"]) {
+  test(`refresh deadline handles TTL ${JSON.stringify(ttl)}`, async () => {
+    const api = loadApi({
+      Date: { now: () => 100_000 },
+      fetch: async () =>
+        new Response(
+          JSON.stringify({
+            player: { username: "Player", user_id: 123 },
+            mode: "mania",
+            scores: [],
+          }),
+          { headers: ttl === null ? {} : { "X-Cache-TTL": ttl } },
+        ),
+    });
+    const result = await api.getScores(
+      "Player",
+      20,
+      "mania",
+      new AbortController().signal,
+    );
+    assert.equal(result.refreshAt, ttl === "0" ? 100_000 : null);
+  });
+}

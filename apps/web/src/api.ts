@@ -4,6 +4,7 @@ import type { ErrorResponse, QueryMode, ScoresResponse } from "./types";
 interface CachedScores {
   data: ScoresResponse;
   expiresAt: number;
+  refreshAt: number | null;
 }
 
 const cache = new Map<string, CachedScores>();
@@ -96,7 +97,8 @@ export async function getScores(
     if (entry.expiresAt <= Date.now()) cache.delete(storedKey);
   }
   const cached = cache.get(key);
-  if (cached) return { data: cached.data, cache: "MEMORY" };
+  if (cached)
+    return { data: cached.data, cache: "MEMORY", refreshAt: cached.refreshAt };
   const headers = new Headers();
   headers.set("X-Visitor-Id", visitorId());
   if (credentials) {
@@ -139,9 +141,22 @@ export async function getScores(
       );
     }
     const data = (await response.json()) as ScoresResponse;
-    const ttl = Number(response.headers.get("X-Cache-TTL"));
+    const ttlHeader = response.headers.get("X-Cache-TTL");
+    const ttl = Number(ttlHeader);
+    const now = Date.now();
+    const refreshAt =
+      ttlHeader !== null &&
+      ttlHeader.trim() !== "" &&
+      Number.isFinite(ttl) &&
+      ttl >= 0
+        ? now + ttl * 1000
+        : null;
     if (Number.isFinite(ttl) && ttl > 0 && !signal.aborted) {
-      const entry = { data, expiresAt: Date.now() + Math.min(180, ttl) * 1000 };
+      const entry = {
+        data,
+        expiresAt: now + Math.min(180, ttl) * 1000,
+        refreshAt,
+      };
       for (const alias of [
         username,
         data.player.username,
@@ -158,6 +173,7 @@ export async function getScores(
     return {
       data,
       cache: response.headers.get("X-Cache") || "UNKNOWN",
+      refreshAt,
     };
   } catch (error) {
     if (timedOut && !signal.aborted) {

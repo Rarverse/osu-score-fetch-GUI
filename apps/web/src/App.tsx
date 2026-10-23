@@ -27,6 +27,7 @@ import intro from "./content/intro.md?raw";
 import { language, locale, t } from "./i18n";
 import ModeIcon from "./ModeIcon";
 import PageScrollbar from "./PageScrollbar";
+import ResultFreshness from "./ResultFreshness";
 import RhythmBackground from "./RhythmBackground";
 import ScoreLimitSelect from "./ScoreLimitSelect";
 import {
@@ -193,6 +194,7 @@ export default function App() {
   const [result, setResult] = useState<ScoresResponse | null>(null);
   const [resultLimit, setResultLimit] = useState(20);
   const [cache, setCache] = useState("");
+  const [refreshAt, setRefreshAt] = useState<number | null>(null);
   const input = useRef<HTMLInputElement>(null);
   const request = useRef<AbortController | null>(null);
   const downloadInProgress = useRef(false);
@@ -320,6 +322,7 @@ export default function App() {
             );
             setResultLimit(selectedLimit);
             setCache(response.cache);
+            setRefreshAt(response.refreshAt);
           }
           break;
         } catch (failure) {
@@ -818,6 +821,10 @@ export default function App() {
                     : t("fetched")}
               </span>
             </div>
+            <ResultFreshness
+              fetchedAt={result.fetched_at}
+              refreshAt={refreshAt}
+            />
             <div className="download-actions">
               <button
                 type="button"
@@ -927,11 +934,6 @@ export default function App() {
             )}
             <div className="result-footnote">
               <span>{t("srNote")}</span>
-              <span>
-                {t("updated", {
-                  date: new Date(result.fetched_at).toLocaleString(locale),
-                })}
-              </span>
             </div>
           </section>
         )}

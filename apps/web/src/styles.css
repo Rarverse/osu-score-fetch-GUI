@@ -1400,7 +1400,8 @@ footer a:hover {
   margin-top: 8px;
 }
 .api-recommendation {
-  max-width: 690px;
+  width: fit-content;
+  max-width: 100%;
   margin: 20px auto 0;
   text-align: left;
   line-height: 1.9;
@@ -1696,4 +1697,15 @@ footer a:hover {
   .limit-menu {
     transition: none;
   }
+}
+
+.result-freshness {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 6px 20px;
+  margin: 0 0 14px;
+  color: #aaa7b5;
+  font-size: 12px;
+  line-height: 1.6;
 }
