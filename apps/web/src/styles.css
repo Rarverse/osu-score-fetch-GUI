@@ -1364,21 +1364,23 @@ footer a:hover {
   text-align: left;
   line-height: 1.85;
 }
-.hero-description > p:first-child {
-  max-width: 36em;
-  margin-bottom: 24px;
-  font-size: 20px;
-  font-weight: 600;
+.hero-description > h2 {
+  margin: 0 0 12px;
+  color: #f1eef7;
+  font-size: clamp(24px, 3vw, 32px);
+  font-weight: 700;
+  line-height: 1.35;
+  letter-spacing: -0.5px;
 }
-@media (min-width: 1200px) {
-  .hero-description > p:first-child {
-    width: 960px;
-    max-width: none;
-    margin-left: -135px;
-    font-size: 16px;
-    text-align: center;
-    white-space: nowrap;
-  }
+.hero-description > h2 + p {
+  margin: 0 0 24px;
+  color: #aaa7b5;
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 1.8;
+}
+.hero-description > h2 + p strong {
+  color: #e4d8f7;
 }
 .hero-description > p + p {
   margin-top: 12px;
@@ -1535,8 +1537,8 @@ footer a:hover {
   min-width: 44px;
 }
 @media (max-width: 600px) {
-  .hero-description > p:first-child {
-    font-size: 18px;
+  .hero-description > h2 + p {
+    font-size: 15px;
     margin-bottom: 20px;
   }
   .hero-description > ul {
