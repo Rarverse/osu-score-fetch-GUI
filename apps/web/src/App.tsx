@@ -697,12 +697,6 @@ export default function App() {
               </div>
             </div>
           </div>
-          <div className="search-note">
-            <Check size={13} />
-            {t("noLogin")}
-            <span>·</span>
-            {t("publicScores")}
-          </div>
         </section>
 
         {error && (

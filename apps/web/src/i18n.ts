@@ -39,8 +39,6 @@ const zh = {
   downloadBrowser: "已交给浏览器下载，请查看下载列表。",
   downloadFailed: "图片下载失败，请稍后重试。",
   bestPerformance: "最佳表现",
-  noLogin: "无需登录",
-  publicScores: "公开成绩",
   ownApi: "使用自己的 osu! API",
   ownApiRecommendation:
     "推荐使用自己的 osu! API 凭据，可在下方「使用自己的 osu! API」中配置。",
@@ -87,7 +85,7 @@ const zh = {
     "点击「查询成绩」查看最佳表现；查询完成后，可下载对应的 B20 / B50 PNG 图片。",
   keyStats: "关键数据",
   fourModes: "四种模式",
-  unofficial: "非官方 fan-made 项目，与 peppy / osu! 无隶属关系。",
+  unofficial: "非官方，与 osu! 无关联",
   busyTitle: "查询服务繁忙，请稍候",
   busyDescription: "查询通道正忙，将自动重试，也可以取消等待。",
   upstreamBusyDescription:
@@ -158,8 +156,6 @@ const en: Record<MessageKey, string> = {
   downloadBrowser: "The image was sent to your browser. Check your downloads.",
   downloadFailed: "Image download failed. Please try again.",
   bestPerformance: "Best performance",
-  noLogin: "No sign-in required",
-  publicScores: "Public scores",
   ownApi: "Use my osu! API credentials",
   ownApiRecommendation:
     "We recommend using your own osu! API credentials. Configure them below under “Use my osu! API credentials”.",
@@ -206,7 +202,7 @@ const en: Record<MessageKey, string> = {
     "Select Search scores to view their best plays, then download a B20 / B50 PNG image.",
   keyStats: "Key stats",
   fourModes: "Four modes",
-  unofficial: "Unofficial fan-made project. Not affiliated with peppy or osu!.",
+  unofficial: "Unofficial · Not affiliated with osu!",
   busyTitle: "The service is busy. Please wait.",
   busyDescription:
     "The query service is busy. We will retry automatically; you can cancel at any time.",

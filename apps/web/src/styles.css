@@ -390,18 +390,6 @@ main {
     padding: 8px 6px;
   }
 }
-.search-note {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 9px;
-  color: #aaa7b5;
-  font-size: 12px;
-  margin-top: 24px;
-}
-.search-note svg {
-  color: #b09ccf;
-}
 .api-credentials {
   max-width: 690px;
   margin: 24px auto 0;
@@ -494,10 +482,6 @@ main {
   align-items: center;
   gap: 5px;
   color: #c9b2ff;
-}
-.search-note > span {
-  margin: 0 2px;
-  color: #4a4855;
 }
 .start-panel {
   max-width: 690px;
@@ -1192,9 +1176,6 @@ footer a:hover {
   .results-heading > div > span {
     font-size: 12px;
   }
-  .search-note {
-    font-size: 12px;
-  }
   .error-panel {
     padding: 17px;
   }
@@ -1368,7 +1349,7 @@ footer a:hover {
   line-height: 1.85;
 }
 .hero-description > h2 {
-  margin: 0 0 6px;
+  margin: 0 0 24px;
   color: #f1eef7;
   font-size: clamp(24px, 3vw, 32px);
   font-weight: 700;
@@ -1377,6 +1358,8 @@ footer a:hover {
 }
 .hero-description > h2 + p {
   margin: 0 0 24px;
+  text-align: center;
+  text-wrap: pretty;
   color: #aaa7b5;
   font-size: 16px;
   font-weight: 400;
@@ -1384,6 +1367,14 @@ footer a:hover {
 }
 .hero-description > h2 + p strong {
   color: #e4d8f7;
+}
+@media (max-width: 600px) {
+  .hero-description > h2 {
+    margin-bottom: 20px;
+  }
+  .hero-description > h2 + p br:nth-of-type(2) {
+    display: none;
+  }
 }
 .hero-description > p + p {
   margin-top: 12px;
