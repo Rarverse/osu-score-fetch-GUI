@@ -448,7 +448,18 @@ export default function App() {
           </h1>
           {customIntro.trim() && (
             <div className="hero-description custom-copy">
-              <Markdown>{customIntro}</Markdown>
+              <Markdown
+                components={{
+                  strong: ({ children }) =>
+                    children === "osu!" ? (
+                      <span className="osu-wordmark">{children}</span>
+                    ) : (
+                      <strong>{children}</strong>
+                    ),
+                }}
+              >
+                {customIntro}
+              </Markdown>
             </div>
           )}
           <p className="api-recommendation">{t("ownApiRecommendation")}</p>

@@ -370,7 +370,7 @@ test("export waits for fonts before drawing and includes dynamic multilingual te
   let requestedText;
   const renderer = loadRenderer({
     loadFonts: (font, text) => {
-      assert.equal(font, '600 16px "Maple Mono CN"');
+      assert.equal(font, '700 16px "Maple Mono CN"');
       requestedText = text;
       return new Promise((resolve) => {
         release = resolve;

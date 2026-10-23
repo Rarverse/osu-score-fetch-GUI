@@ -62,7 +62,7 @@ export async function renderBestScores(
       t("updated", { date: new Date(data.fetched_at).toLocaleString(locale) }),
       "Raru Score Fetcher BEST 0123456789★♪×—…",
     ].join(" ");
-  const faces = await document.fonts.load('600 16px "Maple Mono CN"', fontText);
+  const faces = await document.fonts.load('700 16px "Maple Mono CN"', fontText);
   if (!faces.length) throw new Error(t("downloadFailed"));
   const total = scores.length + 1;
   let completed = 0;
@@ -96,7 +96,7 @@ export async function renderBestScores(
       color = "#f1eff7",
       width = 1400,
     ) => {
-      ctx.font = `600 ${size}px 'Maple Mono CN', monospace`;
+      ctx.font = `700 ${size * 1.06}px 'Maple Mono CN', monospace`;
       ctx.fillStyle = color;
       let fitted = value;
       if (ctx.measureText(fitted).width > width) {
@@ -361,7 +361,7 @@ export async function renderBestScores(
         444,
       );
       const stars = `${number(score.star_rating)}★`;
-      ctx.font = "600 16px 'Maple Mono CN', monospace";
+      ctx.font = "700 16.96px 'Maple Mono CN', monospace";
       const starWidth = ctx.measureText(stars).width;
       const background = starBackground(score.star_rating);
       if (background) {

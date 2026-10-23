@@ -273,7 +273,7 @@
 @font-face {
   font-family: "Maple Mono CN";
   font-style: normal;
-  font-weight: 600 900;
+  font-weight: 600;
   font-display: swap;
   src: url("/fonts/maple-mono/semibold-0.woff2") format("woff2");
   unicode-range:
@@ -282,7 +282,7 @@
 @font-face {
   font-family: "Maple Mono CN";
   font-style: normal;
-  font-weight: 600 900;
+  font-weight: 600;
   font-display: swap;
   src: url("/fonts/maple-mono/semibold-1.woff2") format("woff2");
   unicode-range:
@@ -291,7 +291,7 @@
 @font-face {
   font-family: "Maple Mono CN";
   font-style: normal;
-  font-weight: 600 900;
+  font-weight: 600;
   font-display: swap;
   src: url("/fonts/maple-mono/semibold-2.woff2") format("woff2");
   unicode-range: U+AEA;
@@ -299,7 +299,7 @@
 @font-face {
   font-family: "Maple Mono CN";
   font-style: normal;
-  font-weight: 600 900;
+  font-weight: 600;
   font-display: swap;
   src: url("/fonts/maple-mono/semibold-7.woff2") format("woff2");
   unicode-range: U+1E80-1E85, U+1E9E, U+1EA0-1EF9;
@@ -307,7 +307,7 @@
 @font-face {
   font-family: "Maple Mono CN";
   font-style: normal;
-  font-weight: 600 900;
+  font-weight: 600;
   font-display: swap;
   src: url("/fonts/maple-mono/semibold-8.woff2") format("woff2");
   unicode-range:
@@ -316,7 +316,7 @@
 @font-face {
   font-family: "Maple Mono CN";
   font-style: normal;
-  font-weight: 600 900;
+  font-weight: 600;
   font-display: swap;
   src: url("/fonts/maple-mono/semibold-9.woff2") format("woff2");
   unicode-range:
@@ -325,7 +325,7 @@
 @font-face {
   font-family: "Maple Mono CN";
   font-style: normal;
-  font-weight: 600 900;
+  font-weight: 600;
   font-display: swap;
   src: url("/fonts/maple-mono/semibold-a.woff2") format("woff2");
   unicode-range:
@@ -334,7 +334,7 @@
 @font-face {
   font-family: "Maple Mono CN";
   font-style: normal;
-  font-weight: 600 900;
+  font-weight: 600;
   font-display: swap;
   src: url("/fonts/maple-mono/semibold-c.woff2") format("woff2");
   unicode-range:
@@ -344,7 +344,7 @@
 @font-face {
   font-family: "Maple Mono CN";
   font-style: normal;
-  font-weight: 600 900;
+  font-weight: 600;
   font-display: swap;
   src: url("/fonts/maple-mono/semibold-13.woff2") format("woff2");
   unicode-range: U+4E00-4FFF;
@@ -352,7 +352,7 @@
 @font-face {
   font-family: "Maple Mono CN";
   font-style: normal;
-  font-weight: 600 900;
+  font-weight: 600;
   font-display: swap;
   src: url("/fonts/maple-mono/semibold-14.woff2") format("woff2");
   unicode-range: U+5000-53FF;
@@ -360,7 +360,7 @@
 @font-face {
   font-family: "Maple Mono CN";
   font-style: normal;
-  font-weight: 600 900;
+  font-weight: 600;
   font-display: swap;
   src: url("/fonts/maple-mono/semibold-15.woff2") format("woff2");
   unicode-range: U+5400-57FF;
@@ -368,7 +368,7 @@
 @font-face {
   font-family: "Maple Mono CN";
   font-style: normal;
-  font-weight: 600 900;
+  font-weight: 600;
   font-display: swap;
   src: url("/fonts/maple-mono/semibold-16.woff2") format("woff2");
   unicode-range: U+5800-5BFF;
@@ -376,7 +376,7 @@
 @font-face {
   font-family: "Maple Mono CN";
   font-style: normal;
-  font-weight: 600 900;
+  font-weight: 600;
   font-display: swap;
   src: url("/fonts/maple-mono/semibold-17.woff2") format("woff2");
   unicode-range: U+5C00-5FFF;
@@ -384,7 +384,7 @@
 @font-face {
   font-family: "Maple Mono CN";
   font-style: normal;
-  font-weight: 600 900;
+  font-weight: 600;
   font-display: swap;
   src: url("/fonts/maple-mono/semibold-18.woff2") format("woff2");
   unicode-range: U+6000-63FF;
@@ -392,7 +392,7 @@
 @font-face {
   font-family: "Maple Mono CN";
   font-style: normal;
-  font-weight: 600 900;
+  font-weight: 600;
   font-display: swap;
   src: url("/fonts/maple-mono/semibold-19.woff2") format("woff2");
   unicode-range: U+6400-67FF;
@@ -400,7 +400,7 @@
 @font-face {
   font-family: "Maple Mono CN";
   font-style: normal;
-  font-weight: 600 900;
+  font-weight: 600;
   font-display: swap;
   src: url("/fonts/maple-mono/semibold-1a.woff2") format("woff2");
   unicode-range: U+6800-6BFF;
@@ -408,7 +408,7 @@
 @font-face {
   font-family: "Maple Mono CN";
   font-style: normal;
-  font-weight: 600 900;
+  font-weight: 600;
   font-display: swap;
   src: url("/fonts/maple-mono/semibold-1b.woff2") format("woff2");
   unicode-range: U+6C00-6FFF;
@@ -416,7 +416,7 @@
 @font-face {
   font-family: "Maple Mono CN";
   font-style: normal;
-  font-weight: 600 900;
+  font-weight: 600;
   font-display: swap;
   src: url("/fonts/maple-mono/semibold-1c.woff2") format("woff2");
   unicode-range: U+7000-73FF;
@@ -424,7 +424,7 @@
 @font-face {
   font-family: "Maple Mono CN";
   font-style: normal;
-  font-weight: 600 900;
+  font-weight: 600;
   font-display: swap;
   src: url("/fonts/maple-mono/semibold-1d.woff2") format("woff2");
   unicode-range: U+7400-77FF;
@@ -432,7 +432,7 @@
 @font-face {
   font-family: "Maple Mono CN";
   font-style: normal;
-  font-weight: 600 900;
+  font-weight: 600;
   font-display: swap;
   src: url("/fonts/maple-mono/semibold-1e.woff2") format("woff2");
   unicode-range: U+7800-7BFF;
@@ -440,7 +440,7 @@
 @font-face {
   font-family: "Maple Mono CN";
   font-style: normal;
-  font-weight: 600 900;
+  font-weight: 600;
   font-display: swap;
   src: url("/fonts/maple-mono/semibold-1f.woff2") format("woff2");
   unicode-range: U+7C00-7FFF;
@@ -448,7 +448,7 @@
 @font-face {
   font-family: "Maple Mono CN";
   font-style: normal;
-  font-weight: 600 900;
+  font-weight: 600;
   font-display: swap;
   src: url("/fonts/maple-mono/semibold-20.woff2") format("woff2");
   unicode-range: U+8000-83FF;
@@ -456,7 +456,7 @@
 @font-face {
   font-family: "Maple Mono CN";
   font-style: normal;
-  font-weight: 600 900;
+  font-weight: 600;
   font-display: swap;
   src: url("/fonts/maple-mono/semibold-21.woff2") format("woff2");
   unicode-range: U+8400-87FF;
@@ -464,7 +464,7 @@
 @font-face {
   font-family: "Maple Mono CN";
   font-style: normal;
-  font-weight: 600 900;
+  font-weight: 600;
   font-display: swap;
   src: url("/fonts/maple-mono/semibold-22.woff2") format("woff2");
   unicode-range: U+8800-8BFF;
@@ -472,7 +472,7 @@
 @font-face {
   font-family: "Maple Mono CN";
   font-style: normal;
-  font-weight: 600 900;
+  font-weight: 600;
   font-display: swap;
   src: url("/fonts/maple-mono/semibold-23.woff2") format("woff2");
   unicode-range: U+8C00-8FFF;
@@ -480,7 +480,7 @@
 @font-face {
   font-family: "Maple Mono CN";
   font-style: normal;
-  font-weight: 600 900;
+  font-weight: 600;
   font-display: swap;
   src: url("/fonts/maple-mono/semibold-24.woff2") format("woff2");
   unicode-range: U+9000-93FF;
@@ -488,7 +488,7 @@
 @font-face {
   font-family: "Maple Mono CN";
   font-style: normal;
-  font-weight: 600 900;
+  font-weight: 600;
   font-display: swap;
   src: url("/fonts/maple-mono/semibold-25.woff2") format("woff2");
   unicode-range: U+9400-97FF;
@@ -496,7 +496,7 @@
 @font-face {
   font-family: "Maple Mono CN";
   font-style: normal;
-  font-weight: 600 900;
+  font-weight: 600;
   font-display: swap;
   src: url("/fonts/maple-mono/semibold-26.woff2") format("woff2");
   unicode-range: U+9800-9BFF;
@@ -504,7 +504,7 @@
 @font-face {
   font-family: "Maple Mono CN";
   font-style: normal;
-  font-weight: 600 900;
+  font-weight: 600;
   font-display: swap;
   src: url("/fonts/maple-mono/semibold-27.woff2") format("woff2");
   unicode-range: U+9C00-9FEF;
@@ -512,7 +512,7 @@
 @font-face {
   font-family: "Maple Mono CN";
   font-style: normal;
-  font-weight: 600 900;
+  font-weight: 600;
   font-display: swap;
   src: url("/fonts/maple-mono/semibold-38.woff2") format("woff2");
   unicode-range: U+E0A0-E0A2, U+E0B0-E0B7;
@@ -520,7 +520,7 @@
 @font-face {
   font-family: "Maple Mono CN";
   font-style: normal;
-  font-weight: 600 900;
+  font-weight: 600;
   font-display: swap;
   src: url("/fonts/maple-mono/semibold-3b.woff2") format("woff2");
   unicode-range: U+EE00-EE0B;
@@ -528,7 +528,7 @@
 @font-face {
   font-family: "Maple Mono CN";
   font-style: normal;
-  font-weight: 600 900;
+  font-weight: 600;
   font-display: swap;
   src: url("/fonts/maple-mono/semibold-3f.woff2") format("woff2");
   unicode-range:
@@ -537,7 +537,7 @@
 @font-face {
   font-family: "Maple Mono CN";
   font-style: normal;
-  font-weight: 600 900;
+  font-weight: 600;
   font-display: swap;
   src: url("/fonts/maple-mono/semibold-7e.woff2") format("woff2");
   unicode-range: U+1F850-1F859;
