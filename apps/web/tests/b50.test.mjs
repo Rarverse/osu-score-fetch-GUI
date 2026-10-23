@@ -365,36 +365,14 @@ for (const [seconds, expected] of [
   });
 }
 
-test("export waits for fonts before drawing and includes dynamic multilingual text", async () => {
-  let release;
-  let requestedText;
+test("system-font exports do not require Maple Mono to load", async () => {
   const renderer = loadRenderer({
-    loadFonts: (font, text) => {
-      assert.equal(font, '700 16px "Maple Mono CN"');
-      requestedText = text;
-      return new Promise((resolve) => {
-        release = resolve;
-      });
+    loadFonts: () => {
+      throw new Error("Export must not load Maple Mono");
     },
   });
-  const data = fixture(1);
-  data.scores[0].beatmap_title = "中文テスト";
-  const pending = renderer.renderBestScores(data, 20);
-  assert.equal(renderer.drawings.length, 0);
-  assert.equal(renderer.imageSources.length, 0);
-  assert.ok(requestedText.includes("中文テスト"));
-  release([{}]);
-  await pending;
+  await renderer.renderBestScores(fixture(1), 20);
   assert.ok(renderer.drawings.length > 0);
-});
-
-test("font loading failure prevents exporting with a fallback font", async () => {
-  const renderer = loadRenderer({ loadFonts: async () => [] });
-  await assert.rejects(
-    renderer.renderBestScores(fixture(1), 20),
-    /downloadFailed/,
-  );
-  assert.equal(renderer.drawings.length, 0);
 });
 
 test("CJK runs shift down without moving Latin text or changing mixed-title width", async () => {

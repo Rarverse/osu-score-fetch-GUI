@@ -1,14 +1,15 @@
+@import url("https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap");
 @import "./fonts.css";
 
 :root {
-  font-family: "Maple Mono CN", monospace;
+  font-family:
+    "DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   color: #e9e8ed;
   background: #101116;
-  font-synthesis: weight;
+  font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
-  font-weight: 700;
-  font-size: 17px;
+  font-weight: 400;
   color-scheme: dark;
   scrollbar-width: none;
 }
@@ -169,8 +170,8 @@ h3 {
   display: flex;
   align-items: center;
   gap: 12px;
-  font-family: "Maple Mono CN", monospace;
-  font-size: 23px;
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 22px;
   font-weight: 700;
   letter-spacing: -1px;
 }
@@ -196,7 +197,7 @@ h3 {
   align-items: center;
   gap: 9px;
   color: #a5a5b0;
-  font-size: 13px;
+  font-size: 12px;
 }
 .header-link:hover {
   color: #c9b2ff;
@@ -223,8 +224,9 @@ main {
   box-shadow: 0 0 8px #c9b2ff40;
 }
 .hero-description {
-  font-size: 20px;
-  font-weight: 700;
+  font-family: "Maple Mono CN", monospace;
+  font-size: 19px;
+  font-weight: 600;
   line-height: 1.55;
   color: #e4e2ea;
   letter-spacing: 0.3px;
@@ -262,7 +264,7 @@ main {
   border: 0;
   color: #f1eff7;
   height: 46px;
-  font-size: 15px;
+  font-size: 14px;
 }
 .search-input-wrap input::placeholder {
   color: #aaa7b5;
@@ -279,7 +281,7 @@ main {
   gap: 3px;
   padding: 4px 6px;
   white-space: nowrap;
-  font-size: 13px;
+  font-size: 12px;
   color: #aaa7b5;
   border: 1px solid #3a3845;
   border-radius: 4px;
@@ -297,8 +299,8 @@ main {
   border: 0;
   border-radius: 7px;
   padding: 0 19px;
-  font-size: 14px;
-  font-weight: 700;
+  font-size: 13px;
+  font-weight: 600;
   transition: background 0.15s;
 }
 .search-button:hover {
@@ -314,7 +316,7 @@ main {
   margin-top: 8px;
   text-align: left;
   color: #aaa7b5;
-  font-size: 13px;
+  font-size: 12px;
 }
 .mode-tabs {
   flex: 1;
@@ -335,7 +337,7 @@ main {
   border: 0;
   border-radius: 5px;
   padding: 6px 9px;
-  font-size: 13px;
+  font-size: 12px;
   min-height: 40px;
   white-space: nowrap;
 }
@@ -364,8 +366,8 @@ main {
 }
 .hero-description > p + p {
   color: #8f8c9b;
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 400;
   line-height: 1.7;
   letter-spacing: 0;
 }
@@ -394,7 +396,7 @@ main {
   align-items: center;
   gap: 9px;
   color: #aaa7b5;
-  font-size: 13px;
+  font-size: 12px;
   margin-top: 24px;
 }
 .search-note svg {
@@ -405,12 +407,12 @@ main {
   margin: 24px auto 0;
   text-align: left;
   color: #a5a3af;
-  font-size: 13px;
+  font-size: 12px;
 }
 .api-recommendation {
   margin-top: 16px;
   color: #8f8c9b;
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1.7;
   text-align: center;
 }
@@ -485,7 +487,7 @@ main {
 }
 .api-credentials-note {
   color: #aaa7b5;
-  font-size: 13px;
+  font-size: 12px;
 }
 .api-credentials-content a {
   display: flex;
@@ -501,7 +503,7 @@ main {
   max-width: 690px;
   margin: 0 auto 48px;
   color: #8f8c9b;
-  font-size: 13px;
+  font-size: 12px;
 }
 .instructions-trigger {
   display: flex;
@@ -546,7 +548,7 @@ main {
   margin: 16px auto 0;
   padding-left: 24px;
   text-align: left;
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1.8;
   color: #a5a3af;
 }
@@ -564,7 +566,7 @@ footer {
   gap: 20px;
   padding: 25px 0 30px;
   color: #aaa7b5;
-  font-size: 13px;
+  font-size: 12px;
 }
 footer > div {
   display: flex;
@@ -572,9 +574,9 @@ footer > div {
   gap: 14px;
 }
 .footer-brand {
-  font-family: "Maple Mono CN", monospace;
-  font-weight: 700;
-  font-size: 15px;
+  font-family: "Space Grotesk", sans-serif;
+  font-weight: 600;
+  font-size: 14px;
   color: #96939f;
 }
 footer a {
@@ -593,7 +595,7 @@ footer a:hover {
   padding: 22px;
   border-radius: 12px;
   margin-bottom: 25px;
-  font-size: 15px;
+  font-size: 14px;
 }
 .error-panel {
   border: 1px solid #7b435255;
@@ -603,7 +605,7 @@ footer a:hover {
 .error-panel p,
 .loading-panel p {
   margin-top: 6px;
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1.7;
 }
 .loading-panel {
@@ -629,18 +631,18 @@ footer a:hover {
   margin-bottom: 16px;
 }
 .waiting-panel h2 {
-  font-size: 19px;
-  font-weight: 700;
+  font-size: 18px;
+  font-weight: 500;
 }
 .waiting-panel p {
   color: #a39aac;
-  font-size: 13px;
+  font-size: 12px;
   margin-top: 12px;
   line-height: 1.8;
 }
 .waiting-countdown span {
   display: block;
-  font-size: 13px;
+  font-size: 12px;
 }
 .waiting-panel button {
   border: 1px solid #58476b;
@@ -649,7 +651,7 @@ footer a:hover {
   color: #c9b2ff;
   padding: 9px 18px;
   margin-top: 20px;
-  font-size: 13px;
+  font-size: 12px;
 }
 .waiting-panel button:hover {
   background: #30283e;
@@ -698,15 +700,15 @@ footer a:hover {
   color: #c9b2ff;
 }
 .player-identity h2 {
-  font-family: "Maple Mono CN", monospace;
+  font-family: "Space Grotesk", sans-serif;
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 25px;
+  font-size: 24px;
   word-break: break-word;
 }
 .player-identity p {
-  font-size: 13px;
+  font-size: 12px;
   color: #968ba5;
   margin-top: 6px;
 }
@@ -724,23 +726,23 @@ footer a:hover {
   gap: 8px;
 }
 .player-stats span {
-  font-size: 13px;
+  font-size: 12px;
   color: #99909f;
 }
 .player-stats strong {
-  font-family: "Maple Mono CN", monospace;
-  font-size: 24px;
-  font-weight: 700;
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 23px;
+  font-weight: 500;
   white-space: nowrap;
 }
 .player-stats small {
-  font-size: 13px;
+  font-size: 12px;
   color: #aaa1b8;
   margin-left: 5px;
 }
 .player-stats > div:first-child strong {
   color: #dbc6ff;
-  font-size: 30px;
+  font-size: 29px;
 }
 .results {
   padding-bottom: 32px;
@@ -760,11 +762,11 @@ footer a:hover {
   color: #c9b2ff;
 }
 .results-heading h2 {
-  font-size: 15px;
-  font-weight: 700;
+  font-size: 14px;
+  font-weight: 500;
 }
 .results-heading > div > span {
-  font-size: 13px;
+  font-size: 12px;
   color: #aaa7b5;
   border: 1px solid #34303d;
   border-radius: 5px;
@@ -776,7 +778,7 @@ footer a:hover {
   align-items: center;
   gap: 7px;
   color: #8d849b;
-  font-size: 13px;
+  font-size: 12px;
 }
 .score-list {
   border: 1px solid #ffffff10;
@@ -799,9 +801,9 @@ footer a:hover {
   background: #1e1c26;
 }
 .position {
-  font-family: "Maple Mono CN", monospace;
+  font-family: "Space Grotesk", sans-serif;
   color: #aaa7b5;
-  font-size: 13px;
+  font-size: 12px;
   width: 20px;
   flex-shrink: 0;
 }
@@ -826,15 +828,15 @@ footer a:hover {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 15px;
+  font-size: 14px;
   line-height: 1.4;
-  font-weight: 700;
+  font-weight: 500;
 }
 .map-title:hover {
   color: #c9b2ff;
 }
 .map-info p {
-  font-size: 13px;
+  font-size: 12px;
   color: #aaa7b5;
   margin: 4px 0 7px;
   overflow: hidden;
@@ -855,13 +857,13 @@ footer a:hover {
   display: flex;
   align-items: center;
   gap: 4px;
-  font-size: 13px;
+  font-size: 12px;
   color: #dfc48b;
   border-radius: 3px;
   padding: 2px 4px;
 }
 .mod {
-  font-size: 13px;
+  font-size: 12px;
   color: #c9b2ff;
   background: #30283e;
   padding: 2px 5px;
@@ -869,15 +871,15 @@ footer a:hover {
 }
 .no-mod {
   color: #aaa7b5;
-  font-size: 13px;
+  font-size: 12px;
 }
 .grade {
-  font-family: "Maple Mono CN", monospace;
+  font-family: "Space Grotesk", sans-serif;
   width: 35px;
   text-align: center;
   color: #9fbea3;
-  font-size: 23px;
-  font-weight: 700;
+  font-size: 22px;
+  font-weight: 600;
 }
 .grade-S,
 .grade-SS {
@@ -903,17 +905,17 @@ footer a:hover {
   min-width: 92px;
 }
 .accuracy strong {
-  font-size: 14px;
-  font-weight: 700;
+  font-size: 13px;
+  font-weight: 500;
 }
 .accuracy small {
-  font-size: 13px;
+  font-size: 12px;
   color: #94909f;
   margin-left: 2px;
 }
 .accuracy span {
   color: #aaa7b5;
-  font-size: 13px;
+  font-size: 12px;
 }
 .score-pp {
   display: flex;
@@ -924,21 +926,21 @@ footer a:hover {
   flex-shrink: 0;
 }
 .score-pp strong {
-  font-family: "Maple Mono CN", monospace;
-  font-size: 24px;
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 23px;
   letter-spacing: -0.5px;
-  font-weight: 700;
+  font-weight: 500;
   color: #ccb5fa;
 }
 .score-pp span {
-  font-size: 13px;
+  font-size: 12px;
   color: #aaa7b5;
 }
 .result-footnote {
   display: flex;
   justify-content: space-between;
   gap: 16px;
-  font-size: 13px;
+  font-size: 12px;
   color: #aaa7b5;
   line-height: 1.7;
   margin: 13px 1px 0;
@@ -954,11 +956,11 @@ footer a:hover {
   color: #c9b2ff;
 }
 .empty-scores h3 {
-  font-size: 17px;
+  font-size: 16px;
   margin: 14px 0 8px;
 }
 .empty-scores p {
-  font-size: 13px;
+  font-size: 12px;
   color: #92899d;
 }
 .sr-only {
@@ -1018,17 +1020,17 @@ footer a:hover {
     height: 76px;
   }
   .brand {
-    font-size: 21px;
+    font-size: 20px;
     gap: 8px;
   }
   .header-link {
-    font-size: 13px;
+    font-size: 12px;
   }
   .hero {
     padding: 34px 0 24px;
   }
   .hero-description {
-    font-size: 17px;
+    font-size: 16px;
   }
   .search-panel {
     padding: 6px;
@@ -1040,7 +1042,7 @@ footer a:hover {
     gap: 8px;
   }
   .search-input-wrap input {
-    font-size: 17px;
+    font-size: 16px;
     height: 44px;
   }
   .search-input-wrap kbd {
@@ -1053,7 +1055,7 @@ footer a:hover {
     min-height: 44px;
     margin-top: 6px;
     padding: 0 11px;
-    font-size: 13px;
+    font-size: 12px;
     gap: 6px;
   }
   .search-button > svg:last-child {
@@ -1062,18 +1064,18 @@ footer a:hover {
   .search-options {
     padding: 12px 8px 6px;
     gap: 8px;
-    font-size: 13px;
+    font-size: 12px;
   }
   footer {
     padding: 21px 0;
     gap: 15px;
-    font-size: 13px;
+    font-size: 12px;
   }
   footer > div {
     gap: 10px;
   }
   .footer-brand {
-    font-size: 13px;
+    font-size: 12px;
   }
   .player-card {
     padding: 20px;
@@ -1092,7 +1094,7 @@ footer a:hover {
     flex-shrink: 0;
   }
   .player-identity h2 {
-    font-size: 23px;
+    font-size: 22px;
   }
   .player-identity p {
     line-height: 1.6;
@@ -1108,13 +1110,13 @@ footer a:hover {
     grid-column: 1 / -1;
   }
   .player-stats > div:first-child strong {
-    font-size: 29px;
+    font-size: 28px;
   }
   .player-stats strong {
     font-size: clamp(18px, 5vw, 20px);
   }
   .player-stats span {
-    font-size: 13px;
+    font-size: 12px;
   }
   .score-row {
     display: grid;
@@ -1123,7 +1125,7 @@ footer a:hover {
     padding: 15px 11px;
   }
   .position {
-    font-size: 13px;
+    font-size: 12px;
     grid-row: 1;
   }
   .map-cover {
@@ -1138,16 +1140,16 @@ footer a:hover {
   }
   .map-title {
     overflow-wrap: anywhere;
-    font-size: 13px;
+    font-size: 12px;
   }
   .map-title svg {
     display: none;
   }
   .map-info p {
-    font-size: 13px;
+    font-size: 12px;
   }
   .grade {
-    font-size: 13px;
+    font-size: 12px;
     grid-column: 4;
     grid-row: 1;
     width: auto;
@@ -1166,10 +1168,10 @@ footer a:hover {
     align-items: center;
   }
   .accuracy strong {
-    font-size: 13px;
+    font-size: 12px;
   }
   .accuracy span {
-    font-size: 13px;
+    font-size: 12px;
   }
   .score-pp {
     grid-column: 4;
@@ -1181,23 +1183,23 @@ footer a:hover {
     gap: 2px;
   }
   .score-pp strong {
-    font-size: 21px;
+    font-size: 20px;
   }
   .result-footnote {
     flex-direction: column;
     gap: 4px;
   }
   .results-heading > div > span {
-    font-size: 13px;
+    font-size: 12px;
   }
   .search-note {
-    font-size: 13px;
+    font-size: 12px;
   }
   .error-panel {
     padding: 17px;
   }
   .error-panel p {
-    font-size: 13px;
+    font-size: 12px;
   }
 }
 .start-panel,
@@ -1220,7 +1222,7 @@ footer a:hover {
 }
 @media (min-width: 900px) {
   .hero-description {
-    font-size: 18px;
+    font-size: 17px;
     letter-spacing: 0;
   }
 }
@@ -1268,7 +1270,7 @@ footer a:hover {
   background: #292233;
   min-height: 44px;
   color: #d9caff;
-  font-size: 13px;
+  font-size: 12px;
 }
 .download-status {
   display: flex;
@@ -1289,11 +1291,11 @@ footer a:hover {
   min-width: 0;
 }
 .download-status strong {
-  font-size: 14px;
+  font-size: 13px;
 }
 .download-status p {
   color: #b1aebb;
-  font-size: 13px;
+  font-size: 12px;
   margin: 6px 0 0;
 }
 .download-status progress {
@@ -1305,7 +1307,7 @@ footer a:hover {
 }
 .download-status small {
   color: #b1aebb;
-  font-size: 13px;
+  font-size: 12px;
 }
 .download-status-error,
 .download-status-error p {
@@ -1340,7 +1342,7 @@ footer a:hover {
 }
 @media (max-width: 600px) {
   .brand {
-    font-size: 18px;
+    font-size: 17px;
     letter-spacing: -0.5px;
   }
   .site-header {
@@ -1368,7 +1370,7 @@ footer a:hover {
 .hero-description > h2 {
   margin: 0 0 6px;
   color: #f1eef7;
-  font-size: clamp(25px, 3vw, 34px);
+  font-size: clamp(24px, 3vw, 32px);
   font-weight: 700;
   line-height: 1.35;
   letter-spacing: -0.5px;
@@ -1376,8 +1378,8 @@ footer a:hover {
 .hero-description > h2 + p {
   margin: 0 0 24px;
   color: #aaa7b5;
-  font-size: 17px;
-  font-weight: 600;
+  font-size: 16px;
+  font-weight: 400;
   line-height: 1.8;
 }
 .hero-description > h2 + p strong {
@@ -1385,7 +1387,7 @@ footer a:hover {
 }
 .hero-description > p + p {
   margin-top: 12px;
-  font-size: 14px;
+  font-size: 13px;
   line-height: 1.9;
 }
 .hero-description > ul {
@@ -1395,8 +1397,8 @@ footer a:hover {
   border-radius: 0 8px 8px 0;
   background: linear-gradient(90deg, #a589c208, transparent);
   color: #aaa7b5;
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 400;
   line-height: 1.9;
 }
 .hero-description li + li {
@@ -1435,7 +1437,7 @@ footer a:hover {
   align-items: center;
   gap: 12px;
   color: #aaa7b5;
-  font-size: 13px;
+  font-size: 12px;
 }
 .recent-list {
   display: flex;
@@ -1465,7 +1467,7 @@ footer a:hover {
 .recent-player small {
   display: block;
   color: #aaa7b5;
-  font-size: 11px;
+  font-size: 10px;
 }
 .mode-tabs button,
 .download-button,
@@ -1481,7 +1483,7 @@ footer a:hover {
 }
 .previous-result {
   color: #d4bfef;
-  font-size: 14px;
+  font-size: 13px;
   padding: 12px 0;
 }
 .results[aria-busy="true"] .score-list {
@@ -1493,7 +1495,7 @@ footer a:hover {
 .export-preview {
   margin-bottom: 20px;
   color: #c9b2ff;
-  font-size: 14px;
+  font-size: 13px;
 }
 .export-preview summary {
   cursor: pointer;
@@ -1524,7 +1526,7 @@ footer a:hover {
   box-shadow: 0 8px 32px #0006;
 }
 .quick-nav > span {
-  font-size: 13px;
+  font-size: 12px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1539,7 +1541,7 @@ footer a:hover {
 }
 @media (max-width: 600px) {
   .hero-description > h2 + p {
-    font-size: 16px;
+    font-size: 15px;
     margin-bottom: 20px;
   }
   .hero-description > ul {
@@ -1610,7 +1612,7 @@ footer a:hover {
 }
 .hero-description strong {
   color: #c4bdce;
-  font-weight: 700;
+  font-weight: 600;
 }
 @media (prefers-reduced-motion: reduce) {
   .search-panel,
@@ -1638,7 +1640,7 @@ footer a:hover {
   border-radius: 8px;
   background: #25232e;
   color: #c9c2d5;
-  font-size: 13px;
+  font-size: 12px;
 }
 .limit-trigger svg {
   transition: transform 180ms ease;
@@ -1684,7 +1686,7 @@ footer a:hover {
   border-radius: 6px;
   background: transparent;
   color: #c9c2d5;
-  font-size: 13px;
+  font-size: 12px;
 }
 .limit-menu button[aria-checked="true"] {
   color: #ddcaff;
@@ -1709,7 +1711,7 @@ footer a:hover {
   gap: 6px 20px;
   margin: 0 0 14px;
   color: #aaa7b5;
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1.6;
 }
 
