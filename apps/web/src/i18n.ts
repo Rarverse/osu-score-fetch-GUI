@@ -17,7 +17,7 @@ const zh = {
   home: "Raru 查分器首页",
   pageScroll: "页面滚动条",
   description:
-    "Raru 查分器：输入 osu! 用户名，直接看 TA 的 Top 20/50 成绩。四个模式都能查，不用登录。",
+    "Raru 查分器：输入 osu! 用户名，直接看 TA 的 Best 20/50 成绩。四个模式都能查，不用登录。",
   visitOsu: "访问 osu!",
   playerLabel: "玩家用户名或 ID",
   playerPlaceholder: "输入玩家用户名或 ID",
@@ -28,7 +28,7 @@ const zh = {
   defaultMode: "玩家默认",
   scoreLimit: "成绩数量",
   silverGrade: "银色 {grade}",
-  downloadImage: "导出 Top {count} 图片",
+  downloadImage: "导出 Best {count} 图片",
   downloadingImage: "正在生成图片…",
   downloadTitle: "正在准备 B{count} 图片",
   downloadImages: "正在加载头像与曲绘：{completed} / {total}",
@@ -78,7 +78,7 @@ const zh = {
   instructions: "查询说明",
   startTitle: "输入 osu! 玩家用户名或数字 ID，无需登录。",
   startDescription:
-    "选择游戏模式和 Top 20 / Top 50；「玩家默认」会使用该玩家的首选模式。",
+    "选择游戏模式和 Best 20 / Best 50；「玩家默认」会使用该玩家的首选模式。",
   downloadInstructions:
     "点击「查询成绩」查看最佳表现；查询完成后，可下载对应的 B20 / B50 PNG 图片。",
   keyStats: "关键数据",
@@ -131,7 +131,7 @@ const en: Record<MessageKey, string> = {
   home: "Raru Score Fetcher home",
   pageScroll: "Page scrollbar",
   description:
-    "Raru Score Fetcher: type an osu! username and see their top 20/50 plays. Works for all four modes, no login needed.",
+    "Raru Score Fetcher: type an osu! username and see their best 20/50 plays. Works for all four modes, no login needed.",
   visitOsu: "Visit osu!",
   playerLabel: "Player username or ID",
   playerPlaceholder: "Enter a player username or ID",
@@ -142,7 +142,7 @@ const en: Record<MessageKey, string> = {
   defaultMode: "Player default",
   scoreLimit: "Number of scores",
   silverGrade: "Silver {grade}",
-  downloadImage: "Export Top {count} image",
+  downloadImage: "Export Best {count} image",
   downloadingImage: "Generating image…",
   downloadTitle: "Preparing B{count} image",
   downloadImages: "Loading avatar and covers: {completed} / {total}",
@@ -193,7 +193,7 @@ const en: Record<MessageKey, string> = {
   instructions: "Search instructions",
   startTitle: "Enter an osu! username or numeric ID. No sign-in required.",
   startDescription:
-    "Choose a mode and Top 20 / Top 50. Player default uses the player's preferred mode.",
+    "Choose a mode and Best 20 / Best 50. Player default uses the player's preferred mode.",
   downloadInstructions:
     "Select Search scores to view their best plays, then download a B20 / B50 PNG image.",
   keyStats: "Key stats",

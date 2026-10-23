@@ -181,6 +181,7 @@ export default function App() {
   const [showApiSecret, setShowApiSecret] = useState(false);
   const [limit, setLimit] = useState(20);
   const [mode, setMode] = useState<QueryMode>("auto");
+  const [previewOpen, setPreviewOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [downloadError, setDownloadError] = useState("");
   const [downloadProgress, setDownloadProgress] =
@@ -804,7 +805,7 @@ export default function App() {
                 <Trophy size={17} />
                 <h2>{t("bestPerformance")}</h2>
                 <span>
-                  {modeLabels[result.mode]} · Top {resultLimit}
+                  {modeLabels[result.mode]} · Best {resultLimit}
                 </span>
                 <span>{t("scoreCount", { count: result.scores.length })}</span>
               </div>
@@ -897,9 +898,14 @@ export default function App() {
               )}
             </div>
             {preview && (
-              <details className="export-preview">
+              <details
+                className="export-preview"
+                onToggle={(event) => setPreviewOpen(event.currentTarget.open)}
+              >
                 <summary>{t("previewImage")}</summary>
-                <img src={preview.url} alt={t("previewImage")} />
+                {previewOpen && (
+                  <img src={preview.url} alt={t("previewImage")} />
+                )}
               </details>
             )}
             {result.scores.length ? (

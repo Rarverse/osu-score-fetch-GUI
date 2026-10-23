@@ -16,7 +16,10 @@ function compile(name) {
   ).outputText;
 }
 
-function loadRenderer({ failImages = false } = {}) {
+function loadRenderer({
+  failImages = false,
+  loadFonts = async () => [{}],
+} = {}) {
   const labels = [];
   const imageSources = [];
   const drawings = [];
@@ -26,7 +29,11 @@ function loadRenderer({ failImages = false } = {}) {
   const context = {
     fillStyle: "",
     font: "",
-    measureText: (value) => ({ width: value.length * 8 }),
+    measureText: (value) => ({
+      width: value.length * 8,
+      actualBoundingBoxAscent: /[中文かな]/u.test(value) ? 20 : 14,
+      actualBoundingBoxDescent: /[中文かな]/u.test(value) ? 2 : 4,
+    }),
     fillText(value, x, y) {
       labels.push({
         value,
@@ -60,7 +67,11 @@ function loadRenderer({ failImages = false } = {}) {
     width: 0,
     height: 0,
     getContext: () => context,
-    toBlob: (callback) => callback(new Blob(["png"], { type: "image/png" })),
+    toBlob: (callback) => {
+      canvas.encodedWidth = canvas.width;
+      canvas.encodedHeight = canvas.height;
+      callback(new Blob(["png"], { type: "image/png" }));
+    },
   };
   const imageModule = { exports: {} };
   runInNewContext(compile("images"), {
@@ -86,6 +97,7 @@ function loadRenderer({ failImages = false } = {}) {
     },
     Path2D: class {},
     Image: class {
+      removeAttribute() {}
       naturalWidth = 100;
       naturalHeight = 100;
       set src(value) {
@@ -101,6 +113,7 @@ function loadRenderer({ failImages = false } = {}) {
       }
     },
     document: {
+      fonts: { load: loadFonts },
       createElement: (tag) => {
         if (tag === "canvas") return canvas;
         assert.equal(tag, "a");
@@ -170,15 +183,19 @@ for (const limit of [20, 50]) {
     );
     assert.equal(new Set(titles.map(({ x }) => x)).size, limit === 50 ? 5 : 2);
     assert.equal(new Set(titles.map(({ y }) => y)).size, 10);
-    assert.ok(titles.at(-1).y < renderer.canvas.height - 100);
-    assert.ok(renderer.canvas.height / renderer.canvas.width < 1.5);
+    assert.ok(titles.at(-1).y < renderer.canvas.encodedHeight - 100);
+    assert.ok(
+      renderer.canvas.encodedHeight / renderer.canvas.encodedWidth < 1.5,
+    );
     assert.ok(renderer.labels.some(({ value }) => value === `BEST ${limit}`));
     assert.equal(
       renderer.labels.filter(({ value }) => value.startsWith("Song ")).length,
       limit,
     );
     assert.equal(renderer.drawings.length, limit + 1);
-    assert.equal(renderer.imageSources.length, 2); // One avatar and one reused cover.
+    assert.equal(renderer.imageSources.length, limit + 1);
+    assert.equal(renderer.canvas.width, 0);
+    assert.equal(renderer.canvas.height, 0);
     for (const source of renderer.imageSources)
       assert.ok(source.startsWith("/api/v1/images?url="));
     renderer.saveBestScores(blob, data, limit);
@@ -217,7 +234,7 @@ test("brand and BEST label share the same vertical centre with balanced margins"
   assert.equal(brand.baseline, "middle");
   assert.equal(best.baseline, "middle");
   assert.equal(best.align, "right");
-  assert.equal(best.x, renderer.canvas.width - brand.x);
+  assert.equal(best.x, renderer.canvas.encodedWidth - brand.x);
 });
 
 test("stars follow official colours while mod labels keep their own colour", async () => {
@@ -240,7 +257,7 @@ test("stars follow official colours while mod labels keep their own colour", asy
   );
 });
 
-test("distinct artwork loads with at most two requests and reports progress", async () => {
+test("distinct artwork loads one image at a time and reports progress", async () => {
   const renderer = loadRenderer();
   const data = fixture(50);
   data.scores.forEach((score, index) => {
@@ -248,7 +265,7 @@ test("distinct artwork loads with at most two requests and reports progress", as
   });
   const progress = [];
   await renderer.renderBestScores(data, 50, (update) => progress.push(update));
-  assert.equal(renderer.maxActiveImages(), 2);
+  assert.equal(renderer.maxActiveImages(), 1);
   assert.equal(renderer.imageSources.length, 51);
   assert.equal(new Set(renderer.imageSources).size, 51);
   assert.deepEqual(
@@ -306,15 +323,16 @@ for (const limit of [20, 50]) {
       renderer.labels.filter(({ value }) => value.startsWith("Song ")).length,
       limit,
     );
-    assert.equal(renderer.imageSources.length, 3);
+    assert.equal(renderer.imageSources.length, limit);
     assert.deepEqual(
       progress.map(({ stage, completed, total }) => [stage, completed, total]),
       [
-        ["images", 0, 3],
-        ["images", 1, 3],
-        ["images", 2, 3],
-        ["images", 3, 3],
-        ["rendering", 3, 3],
+        ...Array.from({ length: limit + 2 }, (_, index) => [
+          "images",
+          index,
+          limit + 1,
+        ]),
+        ["rendering", limit + 1, limit + 1],
       ],
     );
     renderer.saveBestScores(blob, data, limit);
@@ -346,3 +364,50 @@ for (const [seconds, expected] of [
     assert.ok(time.x < rank.x);
   });
 }
+
+test("export waits for fonts before drawing and includes dynamic multilingual text", async () => {
+  let release;
+  let requestedText;
+  const renderer = loadRenderer({
+    loadFonts: (font, text) => {
+      assert.equal(font, '600 16px "Maple Mono CN"');
+      requestedText = text;
+      return new Promise((resolve) => {
+        release = resolve;
+      });
+    },
+  });
+  const data = fixture(1);
+  data.scores[0].beatmap_title = "中文テスト";
+  const pending = renderer.renderBestScores(data, 20);
+  assert.equal(renderer.drawings.length, 0);
+  assert.equal(renderer.imageSources.length, 0);
+  assert.ok(requestedText.includes("中文テスト"));
+  release([{}]);
+  await pending;
+  assert.ok(renderer.drawings.length > 0);
+});
+
+test("font loading failure prevents exporting with a fallback font", async () => {
+  const renderer = loadRenderer({ loadFonts: async () => [] });
+  await assert.rejects(
+    renderer.renderBestScores(fixture(1), 20),
+    /downloadFailed/,
+  );
+  assert.equal(renderer.drawings.length, 0);
+});
+
+test("CJK runs shift down without moving Latin text or changing mixed-title width", async () => {
+  const renderer = loadRenderer();
+  const data = fixture(1);
+  data.scores[0].beatmap_title = "中文ABCかな";
+  await renderer.renderBestScores(data, 50);
+  const han = renderer.labels.find(({ value }) => value === "中文");
+  const latin = renderer.labels.find(({ value }) => value === "ABC");
+  const kana = renderer.labels.find(({ value }) => value === "かな");
+  assert.ok(han && latin && kana);
+  assert.equal(han.y, latin.y + 4);
+  assert.equal(kana.y, han.y);
+  assert.equal(latin.x, han.x + 2 * 8);
+  assert.equal(kana.x, latin.x + 3 * 8);
+});

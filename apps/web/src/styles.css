@@ -1,14 +1,13 @@
-@import url("https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap");
+@import "./fonts.css";
 
 :root {
-  font-family:
-    "DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: "Maple Mono CN", monospace;
   color: #e9e8ed;
   background: #101116;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
-  font-weight: 400;
+  font-weight: 600;
   color-scheme: dark;
   scrollbar-width: none;
 }
@@ -169,7 +168,7 @@ h3 {
   display: flex;
   align-items: center;
   gap: 12px;
-  font-family: "Space Grotesk", sans-serif;
+  font-family: "Maple Mono CN", monospace;
   font-size: 22px;
   font-weight: 700;
   letter-spacing: -1px;
@@ -224,7 +223,7 @@ main {
 }
 .hero-description {
   font-size: 19px;
-  font-weight: 500;
+  font-weight: 600;
   line-height: 1.55;
   color: #e4e2ea;
   letter-spacing: 0.3px;
@@ -572,7 +571,7 @@ footer > div {
   gap: 14px;
 }
 .footer-brand {
-  font-family: "Space Grotesk", sans-serif;
+  font-family: "Maple Mono CN", monospace;
   font-weight: 600;
   font-size: 14px;
   color: #96939f;
@@ -630,7 +629,7 @@ footer a:hover {
 }
 .waiting-panel h2 {
   font-size: 18px;
-  font-weight: 500;
+  font-weight: 600;
 }
 .waiting-panel p {
   color: #a39aac;
@@ -698,7 +697,7 @@ footer a:hover {
   color: #c9b2ff;
 }
 .player-identity h2 {
-  font-family: "Space Grotesk", sans-serif;
+  font-family: "Maple Mono CN", monospace;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -728,9 +727,9 @@ footer a:hover {
   color: #99909f;
 }
 .player-stats strong {
-  font-family: "Space Grotesk", sans-serif;
+  font-family: "Maple Mono CN", monospace;
   font-size: 23px;
-  font-weight: 500;
+  font-weight: 600;
   white-space: nowrap;
 }
 .player-stats small {
@@ -761,7 +760,7 @@ footer a:hover {
 }
 .results-heading h2 {
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 600;
 }
 .results-heading > div > span {
   font-size: 12px;
@@ -799,7 +798,7 @@ footer a:hover {
   background: #1e1c26;
 }
 .position {
-  font-family: "Space Grotesk", sans-serif;
+  font-family: "Maple Mono CN", monospace;
   color: #aaa7b5;
   font-size: 12px;
   width: 20px;
@@ -828,7 +827,7 @@ footer a:hover {
   gap: 6px;
   font-size: 14px;
   line-height: 1.4;
-  font-weight: 500;
+  font-weight: 600;
 }
 .map-title:hover {
   color: #c9b2ff;
@@ -872,7 +871,7 @@ footer a:hover {
   font-size: 12px;
 }
 .grade {
-  font-family: "Space Grotesk", sans-serif;
+  font-family: "Maple Mono CN", monospace;
   width: 35px;
   text-align: center;
   color: #9fbea3;
@@ -904,7 +903,7 @@ footer a:hover {
 }
 .accuracy strong {
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 600;
 }
 .accuracy small {
   font-size: 12px;
@@ -924,10 +923,10 @@ footer a:hover {
   flex-shrink: 0;
 }
 .score-pp strong {
-  font-family: "Space Grotesk", sans-serif;
+  font-family: "Maple Mono CN", monospace;
   font-size: 23px;
   letter-spacing: -0.5px;
-  font-weight: 500;
+  font-weight: 600;
   color: #ccb5fa;
 }
 .score-pp span {
@@ -1369,7 +1368,7 @@ footer a:hover {
   max-width: 36em;
   margin-bottom: 24px;
   font-size: 20px;
-  font-weight: 500;
+  font-weight: 600;
 }
 @media (min-width: 1200px) {
   .hero-description > p:first-child {
@@ -1607,7 +1606,7 @@ footer a:hover {
 }
 .hero-description strong {
   color: #c4bdce;
-  font-weight: 500;
+  font-weight: 600;
 }
 @media (prefers-reduced-motion: reduce) {
   .search-panel,
