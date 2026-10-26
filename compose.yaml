@@ -59,6 +59,77 @@ services:
         max-file: "3"
     restart: unless-stopped
 
+  postgres:
+    image: postgres:18-alpine
+    profiles: ["admin"]
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-raru}
+      POSTGRES_USER: ${POSTGRES_USER:-raru}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
+    networks:
+      - backend
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  loki:
+    image: grafana/loki:3.6.16
+    profiles: ["admin"]
+    command: ["-config.file=/etc/loki/config.yaml"]
+    networks:
+      - backend
+    volumes:
+      - ./deploy/observability/loki.yaml:/etc/loki/config.yaml:ro
+      - loki-data:/loki
+    restart: unless-stopped
+
+  alloy:
+    image: grafana/alloy:v1.21.2
+    profiles: ["admin"]
+    command: ["run", "/etc/alloy/config.alloy", "--storage.path=/var/lib/alloy"]
+    networks:
+      - backend
+    volumes:
+      - ./deploy/observability/config.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - alloy-data:/var/lib/alloy
+    depends_on:
+      - loki
+    restart: unless-stopped
+
+  blackbox:
+    image: prom/blackbox-exporter:v0.27.0
+    profiles: ["admin"]
+    command: ["--config.file=/etc/blackbox/blackbox.yml"]
+    networks:
+      - backend
+    volumes:
+      - ./deploy/observability/blackbox/blackbox.yml:/etc/blackbox/blackbox.yml:ro
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v3.15.0
+    profiles: ["admin"]
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=30d
+    networks:
+      - backend
+    volumes:
+      - ./deploy/observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    depends_on:
+      - api
+      - blackbox
+      - loki
+    restart: unless-stopped
+
 networks:
   backend:
     ipam:
@@ -68,3 +139,7 @@ networks:
 
 volumes:
   osu-data:
+  postgres-data:
+  loki-data:
+  alloy-data:
+  prometheus-data:

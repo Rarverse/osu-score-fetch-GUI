@@ -39,15 +39,15 @@ docker compose logs --since=10m api web
 API 默认每行输出一条**英文易读日志**：UTC 时间、级别、模块、请求编号、事件说明和可搜索的 `key=value` 字段。失败时补充英文 `error_reason` 和 `next_step`，说明原因与处理建议。例如（编号和耗时仅为示例）：
 
 ```text
-2026-10-19T10:00:00.000+00:00 INFO    [app.services.osu_client] request_id=abc123 Starting osu! lookup; checking capacity for all required HTTP requests | event=osu_query_started query=player credentials=site api_slot=2 mode=auto required_requests=2
-2026-10-19T10:00:01.000+00:00 INFO    [app.routers.players] request_id=abc123 Scores ready to return to the browser | event=scores_ready username=Player user_id=123 mode=mania limit=20 score_count=20 cached_score_count=50 cache=MISS cache_age_seconds=0.0
-2026-10-19T10:00:01.000+00:00 INFO    [app.main] request_id=abc123 Score query completed | event=scores_query_completed query=Player username=Player user_id=123 api_slot=2 cache=MISS upstream_requests=2 token_refreshed=False mode=mania limit=20 score_count=20 status=200 duration_ms=842.0 credentials=site
+2026-10-19T10:00:00.000+00:00 INFO    [app.services.osu_client] request_id=abc123 Starting osu! lookup; checking capacity for all required HTTP requests | event=osu_query_started credentials=site api_slot=2 mode=auto required_requests=2
+2026-10-19T10:00:01.000+00:00 INFO    [app.routers.players] request_id=abc123 Scores ready to return to the browser | event=scores_ready mode=mania limit=20 score_count=20 cached_score_count=50 cache=MISS cache_age_seconds=0.0
+2026-10-19T10:00:01.000+00:00 INFO    [app.main] request_id=abc123 Score query completed | event=scores_query_completed api_slot=2 cache=MISS upstream_requests=2 token_refreshed=False mode=mania limit=20 score_count=20 status=200 duration_ms=842.0 credentials=site
 2026-10-19T10:00:01.000+00:00 WARNING [app.main] request_id=def456 Request completed with an error | event=request_completed status=503 error_code=SERVER_BUSY retry_after=3 error_reason="Another score lookup is already running" next_step="Wait retry_after seconds; the browser retries automatically"
 ```
 
 `request_started` 到 `request_completed` 之间的同一次查询使用相同的 `request_id`。响应头 `X-Request-ID` 可在浏览器开发者工具 **Network → 请求 → Headers** 中找到。`duration_ms` 是阶段耗时，`wait_ms` 是等待限速或排队的耗时，单位均为毫秒；`retry_after`、`cache_ttl` 和 `cache_age_seconds` 的单位是秒。健康检查成功时不写请求日志。
 
-每次成绩查询结束时输出一条 `scores_query_completed` 汇总，无论成功、缓存命中、参数错误、限流还是上游失败。它集中记录查询内容、已解析的玩家信息、选中的 API 配置组、缓存状态、HTTP 状态码、总耗时，以及失败时的 `error_code` 和处理建议。参数校验未通过时，尚未验证的查询内容或未解析的玩家信息为 `null`；尚未检查缓存时为 `cache=NOT_CHECKED`。`api_slot` 表示本次选中的配置组，未选择站点凭据时为 `null`；是否发出了请求请看 `upstream_requests`。
+每次成绩查询结束时输出一条 `scores_query_completed` 汇总，无论成功、缓存命中、参数错误、限流还是上游失败。它集中记录模式、条数、选中的 API 配置组、缓存状态、HTTP 状态码、总耗时，以及失败时的 `error_code` 和处理建议。普通日志不记录查询输入、玩家用户名或玩家 ID；启用管理员后台后，这些内容只进入应用层加密的请求审计库。尚未检查缓存时为 `cache=NOT_CHECKED`。`api_slot` 表示本次选中的配置组，未选择站点凭据时为 `null`；是否发出了请求请看 `upstream_requests`。
 
 `upstream_requests` 在每次通过限流并尝试发送 osu! HTTP 请求时计数，包含 OAuth、玩家资料和成绩请求，也包含 HTTP 错误及超时等发送失败；被本地限流拦下、尚未尝试发送的请求不计入。图片请求单独处理，不计入此数。正常情况下，缓存命中为 0，复用有效 token 为 2，获取新 token 为 3；中途失败以实际尝试次数为准。`token_refreshed=true` 表示本次成功获取了新的可用 OAuth token（包括使用个人凭据时），复用已有 token 或获取失败时为 `false`。每次请求独立计数；前端重试会产生新的 `request_id` 和汇总。
 
@@ -64,12 +64,12 @@ LOG_LEVEL=DEBUG
 
 | 事件 / 字段 | 含义 |
 | --- | --- |
-| `scores_query_started` / `query`、`mode`、`limit` | 查询开始，记录输入的用户名或 ID；`auto` 表示读取玩家首选模式 |
+| `scores_query_started` / `mode`、`limit` | 查询开始；`auto` 表示读取玩家首选模式。用户名不写入普通日志 |
 | `scores_query_completed` / `upstream_requests`、`token_refreshed` | 一行查询汇总，记录实际 HTTP 尝试次数和是否成功获取新 token；失败时同样输出 |
-| `osu_query_started` / `query`、`credentials`、`api_slot` | 上游查询使用的凭据；`site` 的编号 1 / 2 / 3 对应环境配置组，空缺跳过但不重新编号；个人凭据为 `custom`、编号为 `null`。缓存命中不会产生此事件 |
+| `osu_query_started` / `credentials`、`api_slot` | 上游查询使用的凭据；`site` 的编号 1 / 2 / 3 对应环境配置组，空缺跳过但不重新编号；个人凭据为 `custom`、编号为 `null`。缓存命中不会产生此事件 |
 | `scores_cache_lookup` / `cache` | `HIT` 复用缓存，`MISS` 需要进一步检查不存在缓存或请求上游 |
 | `negative_cache_hit` / `cache_ttl` | 最近已确认玩家不存在，直接复用 404 |
-| `scores_ready` / `username`、`user_id`、`score_count`、`cached_score_count` | 返回玩家的用户名、ID、实际返回条数与完整缓存条数，附带解析后的模式和缓存年龄 |
+| `scores_ready` / `score_count`、`cached_score_count` | 实际返回条数与完整缓存条数，附带解析后的模式和缓存年龄 |
 | `oauth_token_requested` / `oauth_token_reused` | 区分重新获取 OAuth token 和复用站点 token |
 | `oauth_token_invalidated` | 站点 token 被上游拒绝；下次查询会重新获取 |
 | `local_rate_limited` / `scope` | 站点 IP 或玩家限流，`retry_after` 是剩余秒数 |
@@ -85,4 +85,4 @@ LOG_LEVEL=DEBUG
 | `scores_cache_write_failed` / `image_cache_write_failed` / `usage_write_failed` | 缓存或统计写入失败；当前查询仍尽量返回已获取的数据 |
 | `request_failed` / `error_type`、`error_trace`、`error_errno` | 异常类型、应用内相对文件／行号／函数，以及适用时的系统错误编号 |
 
-两种格式均记录查询的用户名或玩家 ID，以及成功返回的玩家用户名和 ID；API 编号仅为配置组序号。均不记录 IP、访客标识、Client ID、密钥、token、原始 URL、其他查询参数或上游响应正文。异常仅记录类型和安全的代码位置，不输出原始异常文字、源码行或局部变量。后台图片预缓存独立运行，其日志可能没有用户请求编号；预缓存失败不会影响成绩查询。Nginx 与 Uvicorn 的原始访问日志继续关闭。Compose 对每个容器启用日志轮转，最多保留 3 个、每个 10 MB 的日志文件；重建容器后旧日志不保证保留。
+两种格式均不记录查询用户名、玩家 ID、IP、访客标识、Client ID、密钥、token、原始 URL、查询字符串或上游响应正文；API 编号仅为配置组序号。异常仅记录类型和安全的代码位置，不输出原始异常文字、源码行或局部变量。后台图片预缓存独立运行，其日志可能没有用户请求编号；预缓存失败不会影响成绩查询。Nginx 输出不含 URI、查询字符串、IP、User-Agent 或 Referer 的安全 JSON 访问日志，Uvicorn 原始访问日志关闭。Compose 对每个容器启用日志轮转，最多保留 3 个、每个 10 MB 的日志文件；启用管理员 profile 后由 Alloy 采集到 Loki 并按 30 天保留。管理界面与保留策略见[管理员后台部署](admin.md)。

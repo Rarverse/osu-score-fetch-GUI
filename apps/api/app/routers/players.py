@@ -77,7 +77,7 @@ def player_scores(
             query_fields.update(query=name, mode=mode or "auto", limit=limit)
         logger.info(
             "scores_query_started",
-            extra={"fields": {"query": name, "mode": mode or "auto", "limit": limit}},
+            extra={"fields": {"mode": mode or "auto", "limit": limit}},
         )
         name = normalize_player(name)
         if (osu_client_id is None) != (osu_client_secret is None) or (
@@ -192,6 +192,7 @@ def player_scores(
         player_id = str(result.player.user_id)
         resolved_mode = result.mode
         selected = result.model_copy(update={"scores": result.scores[:limit]})
+        request.state.audit_result = selected.model_dump(mode="json")
         if query_fields is not None:
             query_fields.update(
                 username=result.player.username,
@@ -203,8 +204,6 @@ def player_scores(
             "scores_ready",
             extra={
                 "fields": {
-                    "username": result.player.username,
-                    "user_id": result.player.user_id,
                     "mode": result.mode,
                     "limit": limit,
                     "score_count": len(selected.scores),

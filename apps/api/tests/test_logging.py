@@ -211,7 +211,7 @@ def test_query_logs_explain_cache_misses_hits_and_returned_scores(tmp_path, logs
         ]
         assert records[0]["event"] == "request_started"
         started = next(item for item in records if item["event"] == "scores_query_started")
-        assert started["query"] == query
+        assert "query" not in started
         assert (
             next(item for item in records if item["event"] == "scores_query_started")["mode"]
             == "auto"
@@ -221,8 +221,8 @@ def test_query_logs_explain_cache_misses_hits_and_returned_scores(tmp_path, logs
             == expected_cache
         )
         ready = next(item for item in records if item["event"] == "scores_ready")
-        assert ready["username"] == "private-player"
-        assert ready["user_id"] == 123
+        assert "username" not in ready
+        assert "user_id" not in ready
         assert "api_slot" not in ready
         assert ready["mode"] == "mania"
         assert ready["limit"] == 20
@@ -232,9 +232,9 @@ def test_query_logs_explain_cache_misses_hits_and_returned_scores(tmp_path, logs
         summaries = [item for item in records if item["event"] == "scores_query_completed"]
         assert len(summaries) == 1
         summary = summaries[0]
-        assert summary["query"] == query
-        assert summary["username"] == "private-player"
-        assert summary["user_id"] == 123
+        assert "query" not in summary
+        assert "username" not in summary
+        assert "user_id" not in summary
         assert summary["cache"] == expected_cache
         assert summary["status"] == 200
         assert score_query_log.get() is None
@@ -331,8 +331,8 @@ def test_query_summary_counts_real_transport_calls_and_resets_between_requests(
         assert summary["api_slot"] == (3 if expected_count and not custom else None)
         assert summary["credentials"] == ("custom" if custom else "site")
         assert summary["cache"] == ("HIT" if expected_count == 0 else "MISS")
-        assert summary["username"] == "Player"
-        assert summary["user_id"] == 123
+        assert "username" not in summary
+        assert "user_id" not in summary
         assert summary["status"] == 200
     for private in ("private-", "98765"):
         assert private not in logs.getvalue()
@@ -367,7 +367,7 @@ def test_failed_query_summary_reports_actual_calls(
     assert response.status_code == status
     (summary,) = [item for item in entries(logs) if item["event"] == "scores_query_completed"]
     assert summary["request_id"] == response.headers["X-Request-ID"]
-    assert summary["query"] == "Player"
+    assert "query" not in summary
     assert summary["upstream_requests"] == len(sent) == count
     assert summary["token_refreshed"] is refreshed
     assert summary["api_slot"] == 3
@@ -474,11 +474,11 @@ def test_concurrent_queries_do_not_share_summary_fields(
     by_id = {item["request_id"]: item for item in summaries}
     active = by_id[response.headers["X-Request-ID"]]
     rejected = by_id[busy.headers["X-Request-ID"]]
-    assert active["query"] == "Player"
+    assert "query" not in active
     assert active["upstream_requests"] == 3
     assert active["api_slot"] == 3
     assert active["token_refreshed"] is True
-    assert rejected["query"] == "OtherPlayer"
+    assert "query" not in rejected
     assert rejected["upstream_requests"] == 0
     assert rejected["api_slot"] is None
     assert rejected["token_refreshed"] is False
@@ -518,7 +518,7 @@ def test_upstream_query_logs_identify_configured_slot_and_custom_credentials(
             )
             assert started["api_slot"] == slot
             assert started["credentials"] == "site"
-            assert started["query"] == "Player"
+            assert "query" not in started
             assert started["required_requests"] == 2
 
     monkeypatch.setattr(service, "get_ossapi_client", lambda *_args: api)
@@ -526,7 +526,7 @@ def test_upstream_query_logs_identify_configured_slot_and_custom_credentials(
     started = next(item for item in reversed(entries(logs)) if item["event"] == "osu_query_started")
     assert started["credentials"] == "custom"
     assert started["api_slot"] is None
-    assert started["query"] == "123"
+    assert "query" not in started
     assert "98765" not in logs.getvalue()
     assert "private-" not in logs.getvalue()
 

@@ -41,6 +41,8 @@ docker compose up -d
 
 限流、缓存等 API 配置也可写进 `.env`，完整变量表见仓库 README。`CACHE_PATH` 和 `STATS_PATH` 由 Compose 固定在数据卷中。API 必须保持单 worker、单副本，限流和并发锁目前位于进程内。
 
+可选管理员后台需要 PostgreSQL、OIDC、加密密钥、Prometheus 和 Loki。配置完成后使用 `docker compose --profile admin up -d --build` 启动；不要仅通过公开端口暴露观测组件。完整步骤见[管理员后台部署](../docs/admin.md)。
+
 ## 2. 接外部反代
 
 访问链路：访客 → 外部 HTTPS 反代 → HTTP web → API。

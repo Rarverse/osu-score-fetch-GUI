@@ -4,7 +4,7 @@
 
 React + TypeScript + Vite · FastAPI + ossapi · Nginx · Docker Compose
 
-[快速部署](#快速部署) · [本地开发](#本地开发) · [环境配置](#环境配置) · [API](#api) · [运行维护](docs/operations.md) · [部署详情](deploy/README.md)
+[快速部署](#快速部署) · [本地开发](#本地开发) · [环境配置](#环境配置) · [API](#api) · [管理员后台](docs/admin.md) · [运行维护](docs/operations.md) · [部署详情](deploy/README.md)
 
 ## 功能
 
@@ -15,6 +15,7 @@ React + TypeScript + Vite · FastAPI + ossapi · Nginx · Docker Compose
 - **最近查询**：在当前浏览器保存最近 5 位成功查询的玩家，可单独删除或清空；支持 `Ctrl / ⌘ + K` 聚焦搜索和长列表快捷导航。
 - **中英文与移动端**：按浏览器语言选择中文或英文，提供响应式布局、键盘菜单操作与减少动态效果支持。
 - **可自托管**：无需玩家登录；支持共享的服务端 OAuth 凭据，也可由访客临时提供个人凭据。
+- **可选管理员后台**：使用管理员角色与邮箱二次验证登录，查看 API 可用性、加密请求审计、当次结果和结构化日志时间线；默认关闭。
 
 当前版本 **v0.1.4**，页脚版本号读取 `apps/web/package.json`。
 
@@ -148,6 +149,7 @@ npm run dev
 | `OSU_REQUESTS_PER_MINUTE` | `60` | API 与图片各自的请求预算，可设为 3–60 |
 | `CORS_ORIGINS` | localhost 与 127.0.0.1 的 5173 端口 | 允许来源，使用 JSON 字符串数组 |
 | `FORWARDED_ALLOW_IPS` | `127.0.0.1` | API 信任的代理 IP / CIDR，逗号分隔 |
+| `ADMIN_ENABLED` | `false` | 启用可选管理员后台；启用前必须完成数据库、OIDC 与加密密钥配置 |
 
 表中的本地默认路径相对于仓库位置描述；**自行填写的相对路径按 API 进程工作目录解析**。Compose 将 `CACHE_PATH`、`STATS_PATH` 固定到数据卷中的 `/var/lib/osu-score-api/cache` 和 `/var/lib/osu-score-api/stats/usage.json`，并根据 `WEB_IPV4` 设置 API 代理信任地址。
 
@@ -163,7 +165,7 @@ npm run dev
 
 浏览器还在 `localStorage` 中保存随机匿名访客 ID（`rarsu-visitor-id`），查询时通过 `X-Visitor-Id` 发送。服务端按 UTC 日期统计查询数、成功查询的去重玩家数、各模式查询数和回访访客数；访客 ID 与成功查询的玩家 ID 以加盐 SHA-256 保存，统计文件不含原始用户名、访客 ID 或 IP。
 
-浏览器缓存命中不产生后端请求，因此不会新增服务端统计。统计文件没有管理页面或查询接口，写入失败不影响成绩返回；使用统计没有成绩缓存的 180 天自动清理机制。成绩缓存本身包含公开玩家资料与成绩，备份时应同时考虑缓存和统计文件。
+浏览器缓存命中不产生后端请求，因此不会新增服务端统计。启用可选管理员后台后，后端请求会写入单独的加密审计库；用户名与当次结果不进入普通日志，完整结果默认保留 7 天、请求元数据默认保留 30 天。后台默认关闭，配置、访问控制和备份要求见[管理员后台部署](docs/admin.md)。成绩缓存本身包含公开玩家资料与成绩，备份时应同时考虑缓存和统计文件。
 
 ## API
 

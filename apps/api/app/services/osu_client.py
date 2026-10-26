@@ -245,7 +245,6 @@ class OsuClient:
                 "osu_query_started",
                 extra={
                     "fields": {
-                        "query": username,
                         "credentials": "custom" if custom_credentials else "site",
                         "api_slot": api_slot,
                         "mode": mode or "auto",
