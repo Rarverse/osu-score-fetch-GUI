@@ -255,6 +255,30 @@ main {
     border-color 180ms ease,
     box-shadow 180ms ease;
 }
+.search-panel::before {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  padding: 2px;
+  background: conic-gradient(
+    from var(--search-highlight-angle),
+    #b79bdc55 0deg 205deg,
+    #b79bdc80 245deg,
+    #f3eaffcc 285deg,
+    #c9b2ffbb 325deg,
+    #b79bdc55 360deg
+  );
+  opacity: 0;
+  filter: blur(0.45px);
+  pointer-events: none;
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  transition: opacity 180ms ease;
+}
 .search-input-wrap {
   min-width: 0;
   display: flex;
@@ -276,10 +300,25 @@ main {
   color: #aaa7b5;
 }
 .search-panel:focus-within {
-  border-color: #b79bdc;
+  border-color: transparent;
   box-shadow:
     0 16px 48px #00000030,
-    0 0 0 3px #b79bdc12;
+    0 0 0 3px #b79bdc12,
+    0 0 16px #b79bdc18;
+}
+.search-panel:focus-within::before {
+  opacity: 0.88;
+  animation: search-highlight-flow 4.2s linear infinite;
+}
+@property --search-highlight-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+@keyframes search-highlight-flow {
+  to {
+    --search-highlight-angle: 360deg;
+  }
 }
 .search-input-wrap kbd {
   display: flex;
@@ -1356,11 +1395,17 @@ footer a:hover {
 }
 .hero-description > h2 {
   margin: 0 0 24px;
+  text-align: center;
   color: #f1eef7;
   font-size: clamp(24px, 3vw, 32px);
   font-weight: 700;
   line-height: 1.35;
   letter-spacing: -0.5px;
+}
+@media (min-width: 900px) {
+  .hero-description.custom-copy {
+    max-width: 780px;
+  }
 }
 .hero-description > h2 + p {
   margin: 0 0 24px;
@@ -1512,17 +1557,23 @@ footer a:hover {
   bottom: max(16px, env(safe-area-inset-bottom));
   left: 50%;
   transform: translateX(-50%);
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
   gap: 12px;
+  width: max-content;
   max-width: calc(100% - 32px);
-  padding: 6px 12px;
-  background: #211e2af5;
-  border: 1px solid #534660;
+  padding: 6px 18px;
+  background: rgb(45 41 55 / 72%);
+  border: 0;
   border-radius: 14px;
   box-shadow: 0 8px 32px #0006;
+  -webkit-backdrop-filter: blur(18px) saturate(135%);
+  backdrop-filter: blur(18px) saturate(135%);
 }
 .quick-nav > span {
+  justify-self: start;
+  min-width: 0;
   font-size: 12px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1535,6 +1586,9 @@ footer a:hover {
   gap: 6px;
   flex-shrink: 0;
   min-width: 44px;
+}
+.quick-nav > button:last-child {
+  justify-self: end;
 }
 @media (max-width: 600px) {
   .hero-description > h2 + p {
@@ -1718,6 +1772,11 @@ footer a:hover {
   text-shadow: 0 0 3px #ffffff80;
   transition: transform 180ms ease;
 }
+.hero-description > h2 .osu-wordmark {
+  font-size: 1.5em;
+  line-height: 1;
+  vertical-align: -0.06em;
+}
 .hero-description .osu-wordmark:hover {
   transform: scale(1.12);
   animation: osu-wordmark-beat 1.2s ease-out infinite;
@@ -1735,6 +1794,13 @@ footer a:hover {
   }
 }
 @media (prefers-reduced-motion: reduce) {
+  .search-panel::before {
+    transition: none;
+  }
+  .search-panel:focus-within::before {
+    background: #b79bdc;
+    animation: none;
+  }
   .hero-description .osu-wordmark {
     transition: none;
   }
