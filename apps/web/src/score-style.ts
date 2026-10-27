@@ -33,6 +33,12 @@ const difficultyStops: [number, string][] = [
   [9, "#000000"],
 ];
 
+const difficultyChannels = difficultyStops.map(([, color]) =>
+  [1, 3, 5].map((offset) =>
+    Number.parseInt(color.slice(offset, offset + 2), 16) ** 2.2,
+  ),
+);
+
 export function starColor(rating: number | null): string {
   if (rating === null || !Number.isFinite(rating) || rating < 0.1)
     return "#aaaaaa";
@@ -40,13 +46,12 @@ export function starColor(rating: number | null): string {
   const upper = stops.findIndex(([value]) => rating <= value);
   if (upper === 0) return stops[0][1];
   if (upper < 0) return stops[stops.length - 1][1];
-  const [low, start] = stops[upper - 1];
-  const [high, end] = stops[upper];
+  const [low] = stops[upper - 1];
+  const [high] = stops[upper];
   const ratio = (rating - low) / (high - low);
-  const channels = [1, 3, 5].map((offset) => {
-    const a = Number.parseInt(start.slice(offset, offset + 2), 16);
-    const b = Number.parseInt(end.slice(offset, offset + 2), 16);
-    return Math.round((a ** 2.2 * (1 - ratio) + b ** 2.2 * ratio) ** (1 / 2.2))
+  const channels = difficultyChannels[upper - 1].map((a, index) => {
+    const b = difficultyChannels[upper][index];
+    return Math.round((a * (1 - ratio) + b * ratio) ** (1 / 2.2))
       .toString(16)
       .padStart(2, "0");
   });
