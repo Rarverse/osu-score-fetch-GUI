@@ -34,8 +34,8 @@ const difficultyStops: [number, string][] = [
 ];
 
 const difficultyChannels = difficultyStops.map(([, color]) =>
-  [1, 3, 5].map((offset) =>
-    Number.parseInt(color.slice(offset, offset + 2), 16) ** 2.2,
+  [1, 3, 5].map(
+    (offset) => Number.parseInt(color.slice(offset, offset + 2), 16) ** 2.2,
   ),
 );
 
