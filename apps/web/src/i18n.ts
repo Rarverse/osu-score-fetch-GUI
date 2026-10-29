@@ -250,7 +250,13 @@ const en: Record<MessageKey, string> = {
   UPSTREAM_BUSY: "The service is waiting for osu! request capacity.",
 };
 
-export function detectLanguage(languages: readonly string[]): "zh" | "en" {
+export function detectLanguage(
+  languages: readonly string[],
+  pathname = "/",
+): "zh" | "en" {
+  const pathLanguage = /^\/(zh|en)\/?$/.exec(pathname)?.[1];
+  if (pathLanguage === "zh" || pathLanguage === "en") return pathLanguage;
+
   for (const language of languages) {
     const prefix = language.toLowerCase().split(/[-_]/)[0];
     if (prefix === "zh" || prefix === "en") return prefix;
@@ -260,6 +266,7 @@ export function detectLanguage(languages: readonly string[]): "zh" | "en" {
 
 export const language = detectLanguage(
   typeof navigator === "undefined" ? ["en"] : navigator.languages,
+  typeof location === "undefined" ? "/" : location.pathname,
 );
 export const locale = language === "zh" ? "zh-CN" : "en-US";
 
