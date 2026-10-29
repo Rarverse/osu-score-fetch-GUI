@@ -3,6 +3,7 @@ import {
   ArrowUpRight,
   Check,
   ChevronRight,
+  ChevronUp,
   CircleAlert,
   Command,
   Download,
@@ -176,6 +177,7 @@ export default function App() {
   const [username, setUsername] = useState("");
   const [apiExpanded, setApiExpanded] = useState(false);
   const [instructionsExpanded, setInstructionsExpanded] = useState(false);
+  const [privacyExpanded, setPrivacyExpanded] = useState(false);
   const [useOwnApi, setUseOwnApi] = useState(false);
   const [apiClientId, setApiClientId] = useState("");
   const [apiClientSecret, setApiClientSecret] = useState("");
@@ -423,11 +425,20 @@ export default function App() {
     <div className="app-shell">
       <header className="site-header">
         <a className="brand" href="/" aria-label={t("home")}>
-          <span className="brand-icon">
-            <i />
-            <i />
-            <i />
-          </span>
+          <svg className="brand-icon" viewBox="0 0 28 22" aria-hidden="true">
+            <path
+              d="M3 18.5 5.1 10h4.4l-2.1 8.5a2 2 0 0 1-2 1.5H4.2a1.2 1.2 0 0 1-1.2-1.5Z"
+              fill="#a78cdd"
+            />
+            <path
+              d="M10 18.5 13.1 6h4.4l-3.1 12.5a2 2 0 0 1-2 1.5h-1.2a1.2 1.2 0 0 1-1.2-1.5Z"
+              fill="#b99eec"
+            />
+            <path
+              d="M17 18.5 21.1 2h4.4l-4.1 16.5a2 2 0 0 1-2 1.5h-1.2a1.2 1.2 0 0 1-1.2-1.5Z"
+              fill="#d3bfff"
+            />
+          </svg>
           {t("appName")}
         </a>
         <a
@@ -985,10 +996,27 @@ export default function App() {
         <p>
           {t("unofficial")} · v{version}
         </p>
-        <details className="privacy-disclosure">
-          <summary>{t("privacy")}</summary>
-          <p>{t("privacyDisclosure")}</p>
-        </details>
+        <span className="privacy-disclosure">
+          <button
+            type="button"
+            aria-expanded={privacyExpanded}
+            aria-controls="privacy-notice"
+            onClick={() => setPrivacyExpanded(!privacyExpanded)}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") setPrivacyExpanded(false);
+            }}
+          >
+            {t("privacy")}
+            <ChevronUp size={14} aria-hidden="true" />
+          </button>
+          <ul id="privacy-notice" aria-hidden={!privacyExpanded}>
+            <li>{t("privacyBrowser")}</li>
+            <li>{t("privacyRequests")}</li>
+            <li>{t("privacyLogs")}</li>
+            <li>{t("privacyRetention")}</li>
+            <li>{t("privacyCredentials")}</li>
+          </ul>
+        </span>
         {/* Temporarily hide private repo link until public
         <a
           href="https://github.com/Rarverse/osu-score-fetch-GUI"

@@ -167,11 +167,10 @@ h3 {
   }
 }
 .site-header {
-  height: 98px;
+  height: 78px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  border-bottom: 1px solid #ffffff0b;
 }
 .brand {
   display: flex;
@@ -183,28 +182,16 @@ h3 {
   letter-spacing: -1px;
 }
 .brand-icon {
-  display: flex;
-  align-items: center;
-  gap: 3px;
   width: 25px;
   height: 25px;
-}
-.brand-icon i {
-  width: 5px;
-  height: 20px;
-  background: #c9b2ff;
-  border-radius: 1px;
-  transform: skew(-12deg);
-}
-.brand-icon i:nth-child(2) {
-  height: 14px;
 }
 .header-link {
   display: flex;
   align-items: center;
   gap: 9px;
+  min-height: 44px;
   color: #a5a5b0;
-  font-size: 12px;
+  font-size: 13px;
 }
 .header-link:hover {
   color: #c9b2ff;
@@ -618,15 +605,75 @@ footer a:hover {
   color: #c9b2ff;
 }
 .privacy-disclosure {
-  max-width: 520px;
-  text-align: right;
+  position: relative;
 }
-.privacy-disclosure summary {
-  cursor: pointer;
+.privacy-disclosure button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
 }
-.privacy-disclosure p {
-  margin-top: 8px;
+.privacy-disclosure button:hover {
+  color: #c9b2ff;
+}
+.privacy-disclosure button svg {
+  transition: transform 200ms ease;
+}
+.privacy-disclosure button[aria-expanded="true"] svg {
+  transform: rotate(180deg);
+}
+.privacy-disclosure ul {
+  position: absolute;
+  z-index: 10;
+  right: 0;
+  bottom: calc(100% + 14px);
+  width: min(440px, calc(100vw - 64px));
+  max-height: 60vh;
+  overflow-y: auto;
+  margin: 0;
+  padding: 20px 20px 20px 36px;
+  border-radius: 12px;
+  background: #292333d9;
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  backdrop-filter: blur(20px) saturate(140%);
+  box-shadow: 0 12px 32px #00000050;
+  color: #dedbe5;
+  font-size: 13px;
   line-height: 1.7;
+  text-align: left;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(10px) scale(0.97);
+  transform-origin: bottom right;
+  transition:
+    opacity 180ms ease,
+    transform 240ms cubic-bezier(0.16, 1, 0.3, 1),
+    visibility 0s linear 240ms;
+}
+.privacy-disclosure li + li {
+  margin-top: 10px;
+}
+.privacy-disclosure li::marker {
+  color: #c9b2ff;
+}
+.privacy-disclosure ul[aria-hidden="false"] {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0) scale(1);
+  transition:
+    opacity 180ms ease,
+    transform 420ms cubic-bezier(0.34, 1.56, 0.64, 1),
+    visibility 0s;
+}
+@media (prefers-reduced-motion: reduce) {
+  .privacy-disclosure button svg,
+  .privacy-disclosure ul {
+    transition: none;
+  }
 }
 .error-panel,
 .loading-panel {
@@ -1043,8 +1090,11 @@ footer a:hover {
   }
   .privacy-disclosure {
     order: 4;
-    max-width: none;
-    text-align: left;
+  }
+  .privacy-disclosure ul {
+    right: auto;
+    left: 0;
+    transform-origin: bottom left;
   }
   .score-row {
     gap: 12px;
@@ -1063,14 +1113,11 @@ footer a:hover {
     padding: 0 20px;
   }
   .site-header {
-    height: 76px;
+    height: 64px;
   }
   .brand {
     font-size: 20px;
     gap: 8px;
-  }
-  .header-link {
-    font-size: 12px;
   }
   .hero {
     padding: 34px 0 24px;
@@ -1450,11 +1497,8 @@ footer a:hover {
   line-height: 1.9;
 }
 .hero-description > ul {
-  padding: 16px 20px 16px 36px;
+  padding: 0 0 0 20px;
   margin: 16px 0 0;
-  border-left: 2px solid #8e76ad50;
-  border-radius: 0 8px 8px 0;
-  background: linear-gradient(90deg, #a589c208, transparent);
   color: #aaa7b5;
   font-size: 13px;
   font-weight: 400;
