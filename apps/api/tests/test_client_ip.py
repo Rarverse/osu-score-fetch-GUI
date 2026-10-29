@@ -99,3 +99,32 @@ def test_api_ignores_spoofed_forwarded_for_from_an_untrusted_peer(tmp_path):
         headers={"X-Forwarded-For": "203.0.113.30"},
     )
     assert limited.status_code == 429
+
+
+def test_global_score_limit_cannot_be_bypassed_with_different_forwarded_ips(tmp_path):
+    app = create_app(
+        Settings(
+            _env_file=None,
+            cache_path=tmp_path,
+            rate_limit_global=2,
+            rate_limit_per_ip=100,
+            rate_limit_per_player=100,
+            forwarded_allow_ips="testclient",
+        )
+    )
+    app.state.osu.get_user_scores = lambda name, mode: _scores()
+    client = TestClient(app)
+
+    for index in range(2):
+        response = client.get(
+            f"/api/v1/players/player-{index}/scores",
+            headers={"X-Forwarded-For": f"203.0.113.{index + 1}"},
+        )
+        assert response.status_code == 200
+
+    limited = client.get(
+        "/api/v1/players/player-3/scores",
+        headers={"X-Forwarded-For": "203.0.113.30"},
+    )
+    assert limited.status_code == 429
+    assert limited.json()["error"]["code"] == "RATE_LIMITED"

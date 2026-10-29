@@ -65,6 +65,80 @@ def test_returning_visitor_is_counted_on_a_later_day_only(tmp_path, monkeypatch)
     assert visitor not in (tmp_path / "usage.json").read_text()
 
 
+def test_usage_retention_and_visitor_cap_are_bounded(tmp_path, monkeypatch):
+    stats = UsageStats(tmp_path / "usage.json", retention_days=2, max_visitors=3)
+    current = {"day": "2026-10-14"}
+
+    class Clock(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            year, month, day = (int(part) for part in current["day"].split("-"))
+            return cls(year, month, day, tzinfo=tz)
+
+    monkeypatch.setattr("app.services.usage.datetime", Clock)
+    for index in range(4):
+        stats.record(
+            mode="mania",
+            success=True,
+            player_id=str(index),
+            visitor_id=f"visitor-{index:04d}",
+        )
+
+    payload = json.loads((tmp_path / "usage.json").read_text())
+    assert len(payload["visitors"]) <= 3
+    assert list(payload["days"]) == ["2026-10-14"]
+
+    current["day"] = "2026-10-16"
+    stats.record(mode="osu", success=False, player_id=None, visitor_id="visitor-new")
+    payload = json.loads((tmp_path / "usage.json").read_text())
+    assert list(payload["days"]) == ["2026-10-16"]
+    assert all(first_seen >= "2026-10-15" for first_seen in payload["visitors"].values())
+
+
+def test_rejected_requests_do_not_persist_visitor_ids(tmp_path):
+    stats_path = tmp_path / "stats" / "usage.json"
+    app = create_app(
+        Settings(
+            _env_file=None,
+            cache_path=tmp_path / "cache",
+            stats_path=stats_path,
+            rate_limit_per_player=1,
+        )
+    )
+    app.state.osu.get_user_scores = lambda *_args: _scores()
+    client = TestClient(app)
+
+    rejected = client.get(
+        f"/api/v1/players/{'x' * 33}/scores",
+        headers={"X-Visitor-Id": "rejected-visitor-0001"},
+    )
+    assert rejected.status_code == 422
+    incomplete = client.get(
+        "/api/v1/players/incomplete/scores",
+        headers={
+            "X-Visitor-Id": "rejected-visitor-0002",
+            "X-Osu-Client-Id": "123",
+        },
+    )
+    assert incomplete.status_code == 422
+    assert not stats_path.exists()
+
+    accepted = client.get(
+        "/api/v1/players/accepted/scores",
+        headers={"X-Visitor-Id": "accepted-visitor-0001"},
+    )
+    assert accepted.status_code == 200
+    limited = client.get(
+        "/api/v1/players/accepted/scores?mode=osu",
+        headers={"X-Visitor-Id": "rejected-visitor-0003"},
+    )
+    assert limited.status_code == 429
+
+    payload = json.loads(stats_path.read_text())
+    assert len(payload["visitors"]) == 1
+    assert next(iter(payload["days"].values()))["queries"] == 1
+
+
 def test_api_counts_distinct_players_only_for_successful_queries(tmp_path):
     stats_path = tmp_path / "stats" / "usage.json"
     app = create_app(
@@ -102,9 +176,9 @@ def test_api_counts_distinct_players_only_for_successful_queries(tmp_path):
 
     payload = json.loads(stats_path.read_text())
     day = next(iter(payload["days"].values()))
-    assert day["queries"] == 5
+    assert day["queries"] == 4
     assert day["distinct_players"] == 2
-    assert day["queries_by_mode"] == {"osu": 1, "taiko": 1, "fruits": 1, "mania": 2}
+    assert day["queries_by_mode"] == {"osu": 0, "taiko": 1, "fruits": 1, "mania": 2}
     assert day["returning_visitors"] == 0
     raw = stats_path.read_text()
     for secret in (

@@ -72,7 +72,8 @@ button:disabled {
 }
 a:focus-visible,
 button:focus-visible,
-select:focus-visible {
+select:focus-visible,
+summary:focus-visible {
   outline: 2px solid #c9b2ff;
   outline-offset: 5px;
 }
@@ -616,6 +617,17 @@ footer a {
 footer a:hover {
   color: #c9b2ff;
 }
+.privacy-disclosure {
+  max-width: 520px;
+  text-align: right;
+}
+.privacy-disclosure summary {
+  cursor: pointer;
+}
+.privacy-disclosure p {
+  margin-top: 8px;
+  line-height: 1.7;
+}
 .error-panel,
 .loading-panel {
   display: flex;
@@ -1025,9 +1037,14 @@ footer a:hover {
   footer {
     flex-wrap: wrap;
   }
-  footer p {
+  footer > p {
     order: 3;
     width: 100%;
+  }
+  .privacy-disclosure {
+    order: 4;
+    max-width: none;
+    text-align: left;
   }
   .score-row {
     gap: 12px;

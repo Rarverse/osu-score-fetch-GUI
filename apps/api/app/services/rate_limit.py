@@ -17,7 +17,8 @@ class RateLimiter:
         self.buckets: dict[str, deque[float]] = {}
         self.lock = Lock()
 
-    def check(self, limits: list[tuple[str, int]]) -> int | None:
+    def check(self, limits: list[tuple[str, int] | tuple[str, int, int]]) -> int | None:
+        weighted = [(*limit, 1) if len(limit) == 2 else limit for limit in limits]
         now = time.monotonic()
         with self.lock:
             # Prune inactive buckets so arbitrary usernames cannot accumulate forever.
@@ -27,10 +28,17 @@ class RateLimiter:
                     bucket.popleft()
                 if not bucket:
                     del self.buckets[key]
-            for key, limit in limits:
+            for key, limit, cost in weighted:
                 bucket = self.buckets.get(key)
-                if bucket and len(bucket) >= limit:
-                    retry_after = max(1, math.ceil(self.window - (now - bucket[0])))
+                used = len(bucket) if bucket else 0
+                if used + cost > limit:
+                    required_expirations = used + cost - limit
+                    retry_after = self.window
+                    if bucket and required_expirations <= used:
+                        retry_after = max(
+                            1,
+                            math.ceil(self.window - (now - bucket[required_expirations - 1])),
+                        )
                     logger.warning(
                         "local_rate_limited",
                         extra={
@@ -38,14 +46,15 @@ class RateLimiter:
                                 "scope": key.split(":", 1)[0],
                                 "retry_after": retry_after,
                                 "limit": limit,
-                                "used": len(bucket),
+                                "used": used,
+                                "cost": cost,
                                 "window_seconds": self.window,
                             }
                         },
                     )
                     return retry_after
-            for key, _ in limits:
-                self.buckets.setdefault(key, deque()).append(now)
+            for key, _limit, cost in weighted:
+                self.buckets.setdefault(key, deque()).extend([now] * cost)
         return None
 
 

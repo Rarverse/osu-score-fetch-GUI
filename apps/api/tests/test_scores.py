@@ -1,3 +1,4 @@
+import json
 import os
 from datetime import UTC, datetime
 from types import SimpleNamespace
@@ -233,6 +234,58 @@ def test_custom_oauth_credentials_are_forwarded_only_with_complete_pair(tmp_path
     assert response.status_code == 200
     assert received == [(123, "private-value")]
     assert "private-value" not in response.text
+
+
+def test_cache_misses_use_a_separate_per_ip_upstream_cost_budget(tmp_path):
+    app = create_app(
+        Settings(
+            _env_file=None,
+            cache_path=tmp_path,
+            stats_path=tmp_path / "usage.json",
+            rate_limit_global=100,
+            rate_limit_per_ip=100,
+            rate_limit_per_player=100,
+            rate_limit_upstream_cost_per_ip=5,
+        )
+    )
+    calls = []
+
+    def fetch(name, mode):
+        calls.append(name)
+        return ScoresResponse(
+            player=Player(
+                user_id=len(calls),
+                username=name,
+                country="CN",
+                avatar_url="",
+                pp=100,
+                global_rank=None,
+                hit_accuracy=99,
+            ),
+            scores=[],
+            fetched_at=datetime.now(UTC),
+        )
+
+    app.state.osu.get_user_scores = fetch
+    client = TestClient(app)
+    accepted_headers = {"X-Visitor-Id": "accepted-visitor-0001"}
+    first = client.get("/api/v1/players/first/scores", headers=accepted_headers)
+    assert first.status_code == 200
+    assert (
+        client.get("/api/v1/players/first/scores", headers=accepted_headers).headers["X-Cache"]
+        == "HIT"
+    )
+
+    limited = client.get(
+        "/api/v1/players/second/scores",
+        headers={"X-Visitor-Id": "rejected-visitor-0002"},
+    )
+    assert limited.status_code == 429
+    assert limited.json()["error"]["code"] == "RATE_LIMITED"
+    assert calls == ["first"]
+    usage = json.loads((tmp_path / "usage.json").read_text())
+    assert next(iter(usage["days"].values()))["queries"] == 2
+    assert len(usage["visitors"]) == 1
 
 
 @pytest.mark.parametrize(

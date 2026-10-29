@@ -3,7 +3,7 @@ import json
 import os
 import re
 import tempfile
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from threading import Lock
 
@@ -28,8 +28,10 @@ def _empty_day() -> dict:
 class UsageStats:
     """Daily counts for one worker. The file stores salted hashes, never raw ids."""
 
-    def __init__(self, path: Path):
+    def __init__(self, path: Path, retention_days: int = 180, max_visitors: int = 10_000):
         self.path = path
+        self.retention_days = retention_days
+        self.max_visitors = max_visitors
         self.lock = Lock()
 
     def record(
@@ -43,6 +45,17 @@ class UsageStats:
         with self.lock:
             payload = self._load()
             day_key = datetime.now(UTC).date().isoformat()
+            cutoff = (
+                datetime.now(UTC).date() - timedelta(days=self.retention_days - 1)
+            ).isoformat()
+            payload["days"] = {
+                key: value for key, value in payload["days"].items() if key >= cutoff
+            }
+            payload["visitors"] = {
+                digest: first_seen
+                for digest, first_seen in payload["visitors"].items()
+                if isinstance(first_seen, str) and first_seen >= cutoff
+            }
             day = payload["days"].setdefault(day_key, _empty_day())
             day["queries"] = int(day.get("queries", 0)) + 1
             by_mode = day.setdefault("queries_by_mode", {name: 0 for name in MODES})
@@ -64,6 +77,14 @@ class UsageStats:
                 digest = self._digest(payload["salt"], f"visitor:{visitor}")
                 first_seen = payload["visitors"].get(digest)
                 if first_seen is None:
+                    if len(payload["visitors"]) >= self.max_visitors:
+                        remove_count = max(1, self.max_visitors // 10)
+                        oldest = sorted(
+                            payload["visitors"],
+                            key=lambda key: (payload["visitors"][key], key),
+                        )[:remove_count]
+                        for key in oldest:
+                            del payload["visitors"][key]
                     payload["visitors"][digest] = day_key
                 elif first_seen < day_key and digest not in returning:
                     returning.append(digest)

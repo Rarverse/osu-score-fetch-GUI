@@ -5,25 +5,26 @@ import hashlib
 import logging
 import re
 import time
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, urlunsplit
 
 import requests
 from fastapi import APIRouter, Query, Request, Response
 from starlette.concurrency import run_in_threadpool
 
+from app.client_ip import client_ip
 from app.logging_setup import safe_error_fields
 from app.services.osu_client import ServiceError
 from app.services.rate_limit import UpstreamBusy, UpstreamLimiter
 
 router = APIRouter(prefix="/api/v1/images", tags=["images"])
 logger = logging.getLogger(__name__)
-# Browser cache lifetime; the server keeps valid artwork indefinitely.
+# Browser cache lifetime; server entries follow CACHE_RETENTION from their last write.
 IMAGE_MAX_AGE = 31536000
 MAX_IMAGE_BYTES = 5 * 1024 * 1024
 IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
 
 
-def validate_image_url(url: str) -> None:
+def validate_image_url(url: str) -> str:
     try:
         parsed = urlsplit(url)
     except ValueError:
@@ -38,6 +39,7 @@ def validate_image_url(url: str) -> None:
     )
     if parsed.scheme != "https" or parsed.fragment or not allowed:
         raise ServiceError(422, "INVALID_IMAGE", "仅支持 osu! 玩家头像和谱面曲绘。")
+    return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, "", ""))
 
 
 def cached_image(cache, key: str) -> Response | None:
@@ -121,8 +123,24 @@ def fetch_image(url: str, limiter: UpstreamLimiter) -> tuple[bytes, str]:
 @router.get("")
 async def image(request: Request, url: str = Query(max_length=2048)):
     # A fixed host/path allowlist and disabled redirects prevent an open proxy.
-    validate_image_url(url)
-    return await get_image(request.app.state, url)
+    state = request.app.state
+    settings = state.settings
+    ip = client_ip(
+        request.client.host if request.client else None,
+        request.headers.get("x-forwarded-for"),
+        settings.forwarded_allow_ips,
+    )
+    retry_after = state.limiter.check(
+        [
+            ("images-global:all", settings.rate_limit_images_global),
+            (f"image-ip:{ip}", settings.rate_limit_images_per_ip),
+        ]
+    )
+    if retry_after:
+        raise ServiceError(
+            429, "RATE_LIMITED", "图片请求过于频繁，请稍后重试。", retry_after=retry_after
+        )
+    return await get_image(state, validate_image_url(url))
 
 
 async def get_image(state, url: str) -> Response:
@@ -194,12 +212,15 @@ async def enqueue_images(state, urls: list[str]) -> None:
     skipped = 0
     dropped = 0
     unique = list(dict.fromkeys(urls))
-    for index, url in enumerate(unique):
-        if not url or url in state.image_pending:
+    for index, raw_url in enumerate(unique):
+        if not raw_url:
             skipped += 1
             continue
         try:
-            validate_image_url(url)
+            url = validate_image_url(raw_url)
+            if url in state.image_pending:
+                skipped += 1
+                continue
             state.image_queue.put_nowait(url)
         except ServiceError:
             skipped += 1

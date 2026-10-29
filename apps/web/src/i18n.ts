@@ -86,6 +86,9 @@ const zh = {
   keyStats: "关键数据",
   fourModes: "四种模式",
   unofficial: "非官方，与 osu! 无关联",
+  privacy: "隐私说明",
+  privacyDisclosure:
+    "最近查询和匿名访客 ID 保存在此浏览器，已下载的 PNG 会保留到用户自行删除。查询会发送给本站和 osu!；页面字体来自 Google Fonts，头像与曲绘来自 osu! 图片站，第三方会收到网络请求信息并按各自规则处理。本站日志记录玩家查询值，按文件大小轮换而非固定天数。匿名统计在下次写入时保留滚动 180 天，缓存文件在最后写入满 180 天后的后续访问中清理；站点闲置时文件可能保留更久。个人 API 密钥仅在页面内存和当次请求中使用，不写入文件。",
   busyTitle: "查询服务繁忙，请稍候",
   busyDescription: "查询通道正忙，将自动重试，也可以取消等待。",
   upstreamBusyDescription:
@@ -203,6 +206,9 @@ const en: Record<MessageKey, string> = {
   keyStats: "Key stats",
   fourModes: "Four modes",
   unofficial: "Unofficial · Not affiliated with osu!",
+  privacy: "Privacy notice",
+  privacyDisclosure:
+    "Recent searches and an anonymous visitor ID stay in this browser; downloaded PNGs remain until you delete them. Searches are sent to this site and osu!; fonts come from Google Fonts, while avatars and covers come from osu! image hosts. Those providers receive network request data and apply their own policies. Site logs record player queries and rotate by file size, not a fixed number of days. On the next write, anonymous statistics keep a rolling 180-day window; cache files are cleaned on later access after 180 days from their last write, so idle files may remain longer. Personal API credentials stay in page memory and the current request and are not written to files.",
   busyTitle: "The service is busy. Please wait.",
   busyDescription:
     "The query service is busy. We will retry automatically; you can cancel at any time.",

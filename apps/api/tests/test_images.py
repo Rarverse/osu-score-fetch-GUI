@@ -13,6 +13,7 @@ from app.main import create_app
 from app.routers.images import IMAGE_MAX_AGE, MAX_IMAGE_BYTES
 
 AVATAR = "https://a.ppy.sh/2?12345"
+CANONICAL_AVATAR = "https://a.ppy.sh/2"
 COVER = "https://assets.ppy.sh/beatmaps/1/covers/list@2x.jpg"
 PNG = base64.b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aMasAAAAASUVORK5CYII="
@@ -30,8 +31,8 @@ def upstream(monkeypatch, *, status=200, media_type="image/png", chunks=None):
     return get
 
 
-def make_app(tmp_path):
-    return create_app(Settings(_env_file=None, cache_path=tmp_path))
+def make_app(tmp_path, **settings):
+    return create_app(Settings(_env_file=None, cache_path=tmp_path, **settings))
 
 
 @pytest.mark.parametrize(
@@ -45,7 +46,8 @@ def test_images_are_same_origin_and_persist_across_app_restarts(tmp_path, monkey
     assert first.headers["content-type"] == "image/png"
     assert first.headers["x-cache"] == "MISS"
     assert first.headers["cache-control"] == f"public, max-age={IMAGE_MAX_AGE}"
-    get.assert_called_once_with(url, timeout=(5, 15), stream=True, allow_redirects=False)
+    expected = CANONICAL_AVATAR if url == AVATAR else url
+    get.assert_called_once_with(expected, timeout=(5, 15), stream=True, allow_redirects=False)
     # A fresh application must reuse the disk cache, without fetching upstream.
     second = TestClient(make_app(tmp_path)).get("/api/v1/images", params={"url": url})
     assert second.content == PNG
@@ -105,32 +107,103 @@ def test_image_timeouts_can_be_retried(tmp_path, monkeypatch):
     assert client.get("/api/v1/images", params={"url": AVATAR}).status_code == 200
 
 
-def test_old_images_are_reused_indefinitely_and_corrupt_images_are_refetched(tmp_path, monkeypatch):
+def test_old_images_follow_retention_and_corrupt_images_are_refetched(tmp_path, monkeypatch):
     get = upstream(monkeypatch)
     app = make_app(tmp_path)
     client = TestClient(app)
     client.get("/api/v1/images", params={"url": AVATAR})
-    key = hashlib.sha256(AVATAR.encode()).hexdigest()
+    key = hashlib.sha256(CANONICAL_AVATAR.encode()).hexdigest()
     path = tmp_path / "images" / f"{key}.json"
-    # Existing cache files remain reusable even years after their original fetch.
+    # A fresh cache entry is reused without another upstream request.
     data = json.loads(path.read_text())
     data["created_at"] -= 10 * 365 * 86400
     path.write_text(json.dumps(data))
     assert client.get("/api/v1/images", params={"url": AVATAR}).headers["x-cache"] == "HIT"
     assert get.call_count == 1
-    # The ordinary score cache retention must not remove image files.
+    # Artwork follows CACHE_RETENTION instead of accumulating forever.
     os.utime(path, (0, 0))
     app.state.images.next_cleanup = 0
-    assert client.get("/api/v1/images", params={"url": AVATAR}).headers["x-cache"] == "HIT"
+    assert client.get("/api/v1/images", params={"url": AVATAR}).headers["x-cache"] == "MISS"
     assert path.exists()
-    assert get.call_count == 1
+    assert get.call_count == 2
     app.state.images.set(key, {"content": "broken base64", "media_type": "image/png"})
     assert client.get("/api/v1/images", params={"url": AVATAR}).content == PNG
-    assert get.call_count == 2
+    assert get.call_count == 3
     # The repaired image is also reusable after an application restart.
     restarted = TestClient(make_app(tmp_path))
     assert restarted.get("/api/v1/images", params={"url": AVATAR}).headers["x-cache"] == "HIT"
-    assert get.call_count == 2
+    assert get.call_count == 3
+
+
+def test_image_query_variants_share_one_cache_and_queue_identity(tmp_path, monkeypatch):
+    get = upstream(monkeypatch)
+    app = make_app(tmp_path)
+    client = TestClient(app)
+
+    first = client.get("/api/v1/images", params={"url": "https://a.ppy.sh/2?one"})
+    second = client.get("/api/v1/images", params={"url": "https://a.ppy.sh/2?two"})
+
+    assert first.headers["x-cache"] == "MISS"
+    assert second.headers["x-cache"] == "HIT"
+    get.assert_called_once_with(
+        CANONICAL_AVATAR,
+        timeout=(5, 15),
+        stream=True,
+        allow_redirects=False,
+    )
+    assert len(list((tmp_path / "images").glob("*.json"))) == 1
+
+
+def test_image_limits_run_before_cache_reads_and_cover_global_and_per_ip(tmp_path, monkeypatch):
+    app = make_app(
+        tmp_path,
+        rate_limit_images_global=2,
+        rate_limit_images_per_ip=1,
+        forwarded_allow_ips="testclient",
+    )
+    key = hashlib.sha256(CANONICAL_AVATAR.encode()).hexdigest()
+    app.state.images.set(
+        key,
+        {"content": base64.b64encode(PNG).decode(), "media_type": "image/png"},
+    )
+    original = app.state.images.get_fresh
+    reads = []
+
+    def counted(cache_key):
+        reads.append(cache_key)
+        return original(cache_key)
+
+    monkeypatch.setattr(app.state.images, "get_fresh", counted)
+    client = TestClient(app)
+    first = client.get(
+        "/api/v1/images",
+        params={"url": AVATAR},
+        headers={"X-Forwarded-For": "203.0.113.1"},
+    )
+    assert first.status_code == 200
+    per_ip = client.get(
+        "/api/v1/images",
+        params={"url": AVATAR},
+        headers={"X-Forwarded-For": "203.0.113.1"},
+    )
+    assert per_ip.status_code == 429
+    second_ip = client.get(
+        "/api/v1/images",
+        params={"url": AVATAR},
+        headers={"X-Forwarded-For": "203.0.113.2"},
+    )
+    assert second_ip.status_code == 200
+    global_limit = client.get(
+        "/api/v1/images",
+        params={"url": AVATAR},
+        headers={"X-Forwarded-For": "203.0.113.3"},
+    )
+    assert global_limit.status_code == 429
+    assert len(reads) == 2
+
+
+def test_default_image_ip_limit_allows_a_complete_b50_export():
+    assert Settings(_env_file=None).rate_limit_images_per_ip >= 51
 
 
 def test_image_is_still_returned_if_disk_cache_write_fails(tmp_path, monkeypatch):
@@ -303,7 +376,7 @@ def test_score_response_queues_only_selected_artwork_and_deduplicates(tmp_path, 
         response = client.get("/api/v1/players/Player/scores?limit=1")
         assert response.status_code == 200
     assert app.state.image_queue.qsize() == 2
-    assert app.state.image_pending == {AVATAR, COVER}
+    assert app.state.image_pending == {CANONICAL_AVATAR, COVER}
     get.assert_not_called()  # Enqueuing does not wait on image HTTP requests.
 
 

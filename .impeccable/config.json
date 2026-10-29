@@ -1,0 +1,14 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "overused-font",
+        "value": "space grotesk",
+        "createdAt": "2026-10-29T06:11:48.766Z",
+        "reason": "Project history: commit dd0eba55 intentionally established Space Grotesk for the incumbent UI; the current privacy/security refinement preserves that typography"
+      }
+    ]
+  }
+}

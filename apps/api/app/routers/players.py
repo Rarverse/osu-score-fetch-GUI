@@ -68,9 +68,31 @@ def player_scores(
     settings = state.settings
     player_id: str | None = None
     resolved_mode = mode
+    record_stats = False
     try:
         name = username.strip()
-        if not name or len(name) > 32 or any(ord(char) < 32 or char in "/\\?#" for char in name):
+        valid_name = (
+            bool(name)
+            and len(name) <= 32
+            and not any(ord(char) < 32 or char in "/\\?#" for char in name)
+        )
+        ip = client_ip(
+            request.client.host if request.client else None,
+            request.headers.get("x-forwarded-for"),
+            settings.forwarded_allow_ips,
+        )
+        limits = [
+            ("scores-global:all", settings.rate_limit_global),
+            (f"ip:{ip}", settings.rate_limit_per_ip),
+        ]
+        if valid_name:
+            limits.append((f"player:{normalize_player(name)}", settings.rate_limit_per_player))
+        retry_after = state.limiter.check(limits)
+        if retry_after:
+            error = ServiceError(429, "RATE_LIMITED", "查询过于频繁，请稍后重试。")
+            error.retry_after = retry_after
+            raise error
+        if not valid_name:
             raise ServiceError(422, "INVALID_PLAYER", "请输入 1–32 字符的用户名或 ID。")
         query_fields = score_query_log.get()
         if query_fields is not None:
@@ -88,21 +110,7 @@ def player_scores(
                 "INVALID_CREDENTIALS",
                 "请同时提供有效的 osu! Client ID 和 Client Secret。",
             )
-        ip = client_ip(
-            request.client.host if request.client else None,
-            request.headers.get("x-forwarded-for"),
-            settings.forwarded_allow_ips,
-        )
-        retry_after = state.limiter.check(
-            [
-                (f"ip:{ip}", settings.rate_limit_per_ip),
-                (f"player:{name}", settings.rate_limit_per_player),
-            ]
-        )
-        if retry_after:
-            error = ServiceError(429, "RATE_LIMITED", "查询过于频繁，请稍后重试。")
-            error.retry_after = retry_after
-            raise error
+        record_stats = True
 
         key = score_cache_key(name, mode)
         missing_key = not_found_cache_key(name)
@@ -138,6 +146,20 @@ def player_scores(
                     )
                     raise _missing_player("HIT", cached_missing[1])
                 if result is None:
+                    retry_after = state.limiter.check(
+                        [
+                            (
+                                f"upstream-ip:{ip}",
+                                settings.rate_limit_upstream_cost_per_ip,
+                                3,
+                            )
+                        ]
+                    )
+                    if retry_after:
+                        record_stats = False
+                        error = ServiceError(429, "RATE_LIMITED", "查询过于频繁，请稍后重试。")
+                        error.retry_after = retry_after
+                        raise error
                     try:
                         if osu_client_id is None:
                             result = state.osu.get_user_scores(name, mode)
@@ -224,12 +246,13 @@ def player_scores(
         )
         return selected
     finally:
-        try:
-            state.stats.record(
-                mode=resolved_mode,
-                success=player_id is not None,
-                player_id=player_id,
-                visitor_id=visitor_id,
-            )
-        except Exception as error:
-            logger.warning("usage_write_failed", extra={"fields": safe_error_fields(error)})
+        if record_stats:
+            try:
+                state.stats.record(
+                    mode=resolved_mode,
+                    success=player_id is not None,
+                    player_id=player_id,
+                    visitor_id=visitor_id,
+                )
+            except Exception as error:
+                logger.warning("usage_write_failed", extra={"fields": safe_error_fields(error)})

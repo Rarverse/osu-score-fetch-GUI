@@ -985,6 +985,10 @@ export default function App() {
         <p>
           {t("unofficial")} · v{version}
         </p>
+        <details className="privacy-disclosure">
+          <summary>{t("privacy")}</summary>
+          <p>{t("privacyDisclosure")}</p>
+        </details>
         {/* Temporarily hide private repo link until public
         <a
           href="https://github.com/Rarverse/osu-score-fetch-GUI"

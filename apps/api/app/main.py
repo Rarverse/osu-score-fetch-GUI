@@ -32,8 +32,14 @@ async def lifespan(app: FastAPI):
             "fields": {
                 "api_requests_per_minute": app.state.settings.osu_requests_per_minute,
                 "rate_limit_window": app.state.settings.rate_limit_window,
+                "rate_limit_global": app.state.settings.rate_limit_global,
                 "rate_limit_per_ip": app.state.settings.rate_limit_per_ip,
                 "rate_limit_per_player": app.state.settings.rate_limit_per_player,
+                "rate_limit_upstream_cost_per_ip": (
+                    app.state.settings.rate_limit_upstream_cost_per_ip
+                ),
+                "rate_limit_images_global": app.state.settings.rate_limit_images_global,
+                "rate_limit_images_per_ip": app.state.settings.rate_limit_images_per_ip,
                 "cache_ttl": app.state.settings.cache_timeout,
                 "negative_cache_ttl": app.state.settings.negative_cache_ttl,
                 "log_format": app.state.settings.log_format,
@@ -65,7 +71,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         settings.negative_cache_ttl,
         settings.negative_cache_ttl,
     )
-    app.state.images = JsonCache(settings.cache_path / "images", ttl=None, retention=None)
+    app.state.images = JsonCache(
+        settings.cache_path / "images", ttl=None, retention=settings.cache_retention
+    )
     app.state.image_lock = AsyncLock()
     app.state.image_limiter = UpstreamLimiter(settings.osu_requests_per_minute, budget="images")
     app.state.image_queue = asyncio.Queue(maxsize=256)
