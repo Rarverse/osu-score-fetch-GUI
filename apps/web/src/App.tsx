@@ -18,7 +18,13 @@ import {
   UserRound,
   X,
 } from "lucide-react";
-import { type FormEvent, useEffect, useRef, useState } from "react";
+import {
+  type FormEvent,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import Markdown from "react-markdown";
 import { version } from "../package.json";
 import { ApiError, getScores, waitForRetry } from "./api";
@@ -184,6 +190,27 @@ export default function App() {
   const [showApiSecret, setShowApiSecret] = useState(false);
   const [limit, setLimit] = useState(20);
   const [mode, setMode] = useState<QueryMode>("auto");
+  const modeTabs = useRef<HTMLFieldSetElement>(null);
+  const modeIndicator = useRef<HTMLSpanElement>(null);
+  useLayoutEffect(() => {
+    const tabs = modeTabs.current;
+    const indicator = modeIndicator.current;
+    if (!tabs || !indicator) return;
+    const update = () => {
+      const selected = tabs.querySelector<HTMLButtonElement>(
+        `[data-mode="${mode}"]`,
+      );
+      if (!selected) return;
+      indicator.style.width = `${selected.offsetWidth}px`;
+      indicator.style.height = `${selected.offsetHeight}px`;
+      indicator.style.transform = `translate(${selected.offsetLeft}px, ${selected.offsetTop}px)`;
+      indicator.style.opacity = "1";
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(tabs);
+    return () => observer.disconnect();
+  }, [mode]);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [downloadError, setDownloadError] = useState("");
@@ -473,65 +500,72 @@ export default function App() {
               </Markdown>
             </div>
           )}
-          <p className="api-recommendation">{t("ownApiRecommendation")}</p>
           <form className="search-panel" onSubmit={search}>
-            <div className="search-input-wrap">
-              <Search size={21} aria-hidden="true" />
-              <label className="sr-only" htmlFor="username">
-                {t("playerLabel")}
-              </label>
-              <input
-                id="username"
-                ref={input}
-                value={username}
-                onChange={(event) => setUsername(event.target.value)}
-                placeholder={t("playerPlaceholder")}
-                autoComplete="off"
-                maxLength={32}
-                disabled={loading || exporting}
-                required
-              />
-              {username && (
-                <button
-                  type="button"
-                  className="clear-input"
-                  aria-label={t("clearInput")}
+            <div className="search-main">
+              <div className="search-input-wrap">
+                <Search size={21} aria-hidden="true" />
+                <label className="sr-only" htmlFor="username">
+                  {t("playerLabel")}
+                </label>
+                <input
+                  id="username"
+                  ref={input}
+                  value={username}
+                  onChange={(event) => setUsername(event.target.value)}
+                  placeholder={t("playerPlaceholder")}
+                  autoComplete="off"
+                  maxLength={32}
                   disabled={loading || exporting}
-                  onClick={() => {
-                    setUsername("");
-                    input.current?.focus();
-                  }}
-                >
-                  <X size={16} />
-                </button>
-              )}
-              <kbd>
-                {/Mac|iPhone|iPad/.test(navigator.platform) ? (
-                  <Command size={11} />
+                  required
+                />
+                {username && (
+                  <button
+                    type="button"
+                    className="clear-input"
+                    aria-label={t("clearInput")}
+                    disabled={loading || exporting}
+                    onClick={() => {
+                      setUsername("");
+                      input.current?.focus();
+                    }}
+                  >
+                    <X size={16} />
+                  </button>
+                )}
+                <kbd>
+                  {/Mac|iPhone|iPad/.test(navigator.platform) ? (
+                    <Command size={11} />
+                  ) : (
+                    "Ctrl"
+                  )}{" "}
+                  K
+                </kbd>
+              </div>
+              <button
+                className="search-button"
+                disabled={loading || exporting}
+                type="submit"
+              >
+                {loading ? (
+                  <LoaderCircle size={17} className="spin" />
                 ) : (
-                  "Ctrl"
-                )}{" "}
-                K
-              </kbd>
+                  <Search size={17} />
+                )}
+                {waiting ? t("waiting") : loading ? t("querying") : t("query")}
+                {!loading && <ChevronRight size={16} />}
+              </button>
             </div>
-            <button
-              className="search-button"
-              disabled={loading || exporting}
-              type="submit"
-            >
-              {loading ? (
-                <LoaderCircle size={17} className="spin" />
-              ) : (
-                <Search size={17} />
-              )}
-              {waiting ? t("waiting") : loading ? t("querying") : t("query")}
-              {!loading && <ChevronRight size={16} />}
-            </button>
             <div className="search-options">
-              <fieldset className="mode-tabs">
+              <fieldset className="mode-tabs" ref={modeTabs}>
                 <legend className="sr-only">{t("mode")}</legend>
+                <span
+                  className="mode-indicator"
+                  ref={modeIndicator}
+                  aria-hidden="true"
+                />
                 <button
                   type="button"
+                  data-mode="auto"
                   aria-pressed={mode === "auto"}
                   disabled={loading || exporting}
                   onClick={() => changeMode("auto")}
@@ -543,6 +577,7 @@ export default function App() {
                   <button
                     type="button"
                     key={value}
+                    data-mode={value}
                     aria-pressed={mode === value}
                     disabled={loading || exporting}
                     onClick={() => changeMode(value)}
@@ -611,6 +646,7 @@ export default function App() {
             </div>
           )}
           <div className="api-credentials">
+            <p className="api-recommendation">{t("ownApiRecommendation")}</p>
             <button
               type="button"
               className="api-credentials-trigger"
