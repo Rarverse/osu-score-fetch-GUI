@@ -15,7 +15,6 @@ const textRegions = [
   ".api-recommendation",
   ".recent-heading",
   ".api-credentials-trigger",
-  ".start-panel",
   ".previous-result",
   ".results-heading",
   ".result-freshness",
@@ -29,9 +28,7 @@ const placement = (container: HTMLElement) => {
   const bounds = container.getBoundingClientRect();
   const padding = size / 2 + 8;
   // Measure on each pulse so wrapping and newly loaded results are respected.
-  const behindText = Array.from(
-    container.parentElement?.querySelectorAll(textRegions) ?? [],
-  ).some((element) => {
+  const overlaps = (element: Element) => {
     const rect = element.getBoundingClientRect();
     return (
       rect.width > 0 &&
@@ -41,15 +38,26 @@ const placement = (container: HTMLElement) => {
       bounds.top + y + padding > rect.top &&
       bounds.top + y - padding < rect.bottom
     );
-  });
+  };
+  const behindSearch = Array.from(
+    container.parentElement?.querySelectorAll(
+      ".search-main, .search-options",
+    ) ?? [],
+  ).some(overlaps);
+  const behindText = Array.from(
+    container.parentElement?.querySelectorAll(textRegions) ?? [],
+  ).some(overlaps);
   return {
     x,
     y,
     size,
     behindText,
-    skipped: behindText && Math.random() < 0.3,
+    behindSearch,
+    skipped: behindSearch
+      ? Math.random() < 0.75
+      : behindText && Math.random() < 0.3,
     shape: shapes[Math.floor(Math.random() * shapes.length)],
-    flash: !behindText && Math.random() < 0.16,
+    flash: !behindText && !behindSearch && Math.random() < 0.16,
     color: colors[Math.floor(Math.random() * colors.length)],
     angle: random(-25, 25),
   };
@@ -69,7 +77,7 @@ function Spark() {
   return (
     <span
       ref={element}
-      className={`rhythm-spark${point?.flash ? " rhythm-spark-flash" : ""}${point?.behindText ? " rhythm-spark-subtle" : ""}`}
+      className={`rhythm-spark${point?.flash ? " rhythm-spark-flash" : ""}${point?.behindText ? " rhythm-spark-subtle" : ""}${point?.behindSearch ? " rhythm-spark-search" : ""}`}
       style={{
         left: point?.x,
         top: point?.y,

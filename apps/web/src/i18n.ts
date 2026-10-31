@@ -77,12 +77,6 @@ const zh = {
   srTitle: "谱面基础 SR，未应用 mods",
   srNote: "SR 为谱面基础值（未应用 mods）；pp 为 osu! 返回值。",
   updated: "更新于 {date}",
-  instructions: "查询说明",
-  startTitle: "输入 osu! 玩家用户名或数字 ID，无需登录。",
-  startDescription:
-    "选择游戏模式和 Best 20 / Best 50；「玩家默认」会使用该玩家的首选模式。",
-  downloadInstructions:
-    "点击「查询成绩」查看最佳表现；查询完成后，可下载对应的 B20 / B50 PNG 图片。",
   keyStats: "关键数据",
   fourModes: "四种模式",
   unofficial: "非官方，与 osu! 无关联",
@@ -203,12 +197,6 @@ const en: Record<MessageKey, string> = {
   srTitle: "Base star rating, without mods",
   srNote: "SR is the base difficulty without mods; pp comes from osu!.",
   updated: "Updated {date}",
-  instructions: "Search instructions",
-  startTitle: "Enter an osu! username or numeric ID. No sign-in required.",
-  startDescription:
-    "Choose a mode and Best 20 / Best 50. Player default uses the player's preferred mode.",
-  downloadInstructions:
-    "Select Search scores to view their best plays, then download a B20 / B50 PNG image.",
   keyStats: "Key stats",
   fourModes: "Four modes",
   unofficial: "Unofficial · Not affiliated with osu!",

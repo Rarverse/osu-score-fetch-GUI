@@ -182,7 +182,6 @@ export default function App() {
   const hero = useRef<HTMLElement>(null);
   const [username, setUsername] = useState("");
   const [apiExpanded, setApiExpanded] = useState(false);
-  const [instructionsExpanded, setInstructionsExpanded] = useState(false);
   const [privacyExpanded, setPrivacyExpanded] = useState(false);
   const [useOwnApi, setUseOwnApi] = useState(false);
   const [apiClientId, setApiClientId] = useState("");
@@ -986,33 +985,6 @@ export default function App() {
             )}
             <div className="result-footnote">
               <span>{t("srNote")}</span>
-            </div>
-          </section>
-        )}
-        {!result && !loading && !error && (
-          <section className="start-panel">
-            <button
-              className="instructions-trigger"
-              type="button"
-              aria-expanded={instructionsExpanded}
-              aria-controls="search-instructions"
-              onClick={() => setInstructionsExpanded(!instructionsExpanded)}
-            >
-              <ChevronRight size={14} aria-hidden="true" />
-              {t("instructions")}
-            </button>
-            <div
-              id="search-instructions"
-              className="instructions-panel"
-              aria-hidden={!instructionsExpanded}
-            >
-              <div className="instructions-body">
-                <ol className="usage-steps">
-                  <li>{t("startTitle")}</li>
-                  <li>{t("startDescription")}</li>
-                  <li>{t("downloadInstructions")}</li>
-                </ol>
-              </div>
             </div>
           </section>
         )}

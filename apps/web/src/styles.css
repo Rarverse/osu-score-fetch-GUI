@@ -150,6 +150,12 @@ h3 {
 .rhythm-spark-subtle .rhythm-spark-shape {
   opacity: 0.25;
 }
+.rhythm-spark-search {
+  filter: blur(1.5px);
+}
+.rhythm-spark-search .rhythm-spark-shape {
+  opacity: 0.12;
+}
 @keyframes spark-glimmer {
   0%,
   65%,
@@ -542,65 +548,6 @@ main {
   display: flex;
   align-items: center;
   gap: 5px;
-  color: #c9b2ff;
-}
-.start-panel {
-  max-width: 690px;
-  margin: 0 auto 48px;
-  color: #8f8c9b;
-  font-size: 12px;
-}
-.instructions-trigger {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin: 0 auto;
-  padding: 10px;
-  border: 0;
-  background: transparent;
-  color: inherit;
-}
-.instructions-trigger > svg {
-  transition: transform 280ms ease;
-}
-.instructions-trigger[aria-expanded="true"] > svg {
-  transform: rotate(90deg);
-}
-.instructions-panel {
-  display: grid;
-  grid-template-rows: 0fr;
-  opacity: 0;
-  visibility: hidden;
-  transform: translateY(-6px);
-  transition:
-    grid-template-rows 280ms ease,
-    opacity 280ms ease,
-    transform 280ms ease,
-    visibility 280ms;
-}
-.instructions-panel[aria-hidden="false"] {
-  grid-template-rows: 1fr;
-  opacity: 1;
-  visibility: visible;
-  transform: translateY(0);
-}
-.instructions-body {
-  min-height: 0;
-  overflow: hidden;
-}
-.usage-steps {
-  max-width: 590px;
-  margin: 16px auto 0;
-  padding-left: 24px;
-  text-align: left;
-  font-size: 12px;
-  line-height: 1.8;
-  color: #a5a3af;
-}
-.usage-steps li + li {
-  margin-top: 10px;
-}
-.usage-steps li::marker {
   color: #c9b2ff;
 }
 footer {
@@ -1321,7 +1268,6 @@ footer a:hover {
     font-size: 12px;
   }
 }
-.start-panel,
 .loading-panel,
 .waiting-panel,
 .error-panel,
@@ -1350,7 +1296,6 @@ footer a:hover {
     animation: none;
     opacity: 0.15;
   }
-  .start-panel,
   .loading-panel,
   .waiting-panel,
   .error-panel,
@@ -1358,8 +1303,6 @@ footer a:hover {
   .download-status {
     animation: none;
   }
-  .instructions-trigger > svg,
-  .instructions-panel,
   .api-credentials-trigger > svg,
   .api-credentials-panel {
     transition: none;
