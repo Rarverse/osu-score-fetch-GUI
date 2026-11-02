@@ -1,12 +1,25 @@
 # Raru 查分器
 
+**简体中文** | [English](README.en.md)
+
 一个支持 osu! 四种模式的玩家查分网页工具。输入用户名或 ID，即可查看 **Best 20 / Best 50**，并导出 B20 / B50 PNG 图片。
 
 React + TypeScript + Vite · FastAPI + ossapi · Nginx · Docker Compose
 
-[快速部署](#快速部署) · [本地开发](#本地开发) · [环境配置](#环境配置) · [API](#api) · [运行维护](docs/operations.md) · [部署详情](deploy/README.md)
+## 目录
 
-## 功能
+1. [功能与使用范围](#功能与使用范围)
+2. [快速部署](#快速部署)
+3. [本地开发](#本地开发)
+4. [环境配置](#环境配置)
+5. [凭据与隐私](#凭据与隐私)
+6. [API](#api)
+7. [项目结构与检查](#项目结构与检查)
+8. [致谢与声明](#致谢与声明) · [许可证](#许可证)
+
+其他文档：[运行维护](docs/operations.md) · [部署详情](deploy/README.md)
+
+## 功能与使用范围
 
 - **四种模式**：osu!、osu!taiko、osu!catch、osu!mania；可读取玩家默认模式或手动选择。
 - **玩家与成绩概览**：查看玩家 pp、全球排名、准确率，以及成绩的 pp、准确率、mods、评级、combo 和谱面基础 SR；评级与星级配色在网页和导出图中保持一致。
@@ -22,7 +35,11 @@ React + TypeScript + Vite · FastAPI + ossapi · Nginx · Docker Compose
 
 ## 快速部署
 
-需要 Docker Engine 和 Docker Compose 插件（Compose ≥ 2.24.0）。克隆仓库后执行：
+需要 Docker Engine 和 Docker Compose 插件（Compose ≥ 2.24.0）。
+
+### 1. 启动服务
+
+克隆仓库后执行：
 
 ```sh
 git clone https://github.com/Rarverse/osu-score-fetch-GUI.git
@@ -32,6 +49,8 @@ docker compose up -d
 
 首次启动会从源码构建前后端，打开 [http://127.0.0.1:8080](http://127.0.0.1:8080)。宿主机无需安装 Node.js、Python 或 uv。
 
+### 2. 配置 OAuth 凭据
+
 **无需服务端凭据也能启动页面，但查询需要 OAuth 凭据。** 可以在页面中临时填写个人凭据，或为站点配置共享凭据：
 
 ```sh
@@ -40,6 +59,14 @@ chmod 600 .env
 ```
 
 编辑 `.env`，取消注释并填写 `OSU_CLIENT_ID` 和 `OSU_CLIENT_SECRET`。凭据来自 [osu! 账号设置](https://osu.ppy.sh/home/account/edit) 中的 OAuth 应用，使用 Client ID / Client Secret，而非旧版 API Key。项目使用 client credentials grant 与 `public` scope，无需玩家登录授权。
+
+保存后重新创建服务，使凭据生效：
+
+```sh
+docker compose up -d
+```
+
+### 3. 配置公网地址（可选）
 
 如需公开部署，将 `VITE_SITE_URL` 设置为公网根地址，例如 `https://scores.example.com`，然后重建：
 
@@ -72,7 +99,7 @@ docker compose logs --tail=100
 更新时执行：
 
 ```sh
-git pull
+git pull --ff-only
 docker compose up -d --build
 ```
 
@@ -158,23 +185,37 @@ npm run dev
 
 ## 凭据与隐私
 
+### 凭据
+
 服务端密钥保存在未提交的环境文件中，不能放进 `VITE_` 变量，这类变量会公开到前端构建产物。
 
 页面中的个人 Client ID / Client Secret 仅保存在当前页面内存，刷新或关闭后清除；查询时通过 `X-Osu-Client-Id` / `X-Osu-Client-Secret` 请求头发送给后端，由后端换取 token。浏览器 Network 面板能够看到自己提交的凭据。服务端不将个人凭据写入文件，OAuth token 也不写入 ossapi 的 pickle 文件。公开站点使用个人凭据需要 HTTPS，本机开发地址除外。
 
 个人凭据仅在缓存未命中时用于上游请求；命中时复用同一份公开成绩，不会再次验证凭据。个人凭据与服务端凭据共用缓存、限流和全站请求预算。
 
+### 浏览器存储
+
 最近查询记录（玩家 ID、用户名、头像 URL 和查询模式）保存在当前浏览器的 `localStorage` 中，不包含 API 凭据；可通过页面删除或清空。成绩响应与导出预览的临时 Blob URL 仅缓存在页面内存中，刷新后清除；已经下载的 PNG 由浏览器或用户保存，不会随页面刷新删除。
+
+### 匿名使用统计
 
 浏览器还在 `localStorage` 中保存随机匿名访客 ID（`rarsu-visitor-id`），查询时通过 `X-Visitor-Id` 发送。服务端只对通过参数校验和适用的站点限流的查询按 UTC 日期统计查询数、各模式查询数和各来源查询数。配置 `STATS_HASH_SALT` 后，还统计成功查询的去重玩家数和回访访客数：访客 ID 与成功查询的玩家 ID 使用该密钥计算 HMAC-SHA-256，统计文件只保存哈希与不可逆密钥标识，不保存密钥或原始身份字段。统计使用滚动 180 天窗口，在下次统计写入时清理窗口外数据，并最多保留 10,000 个访客哈希；站点没有后续查询时，旧文件不会自行定时删除。
 
 使用 `openssl rand -hex 32` 生成新的 `STATS_HASH_SALT`，写入实际使用的 API 环境文件（本地 `apps/api/.env`、源码 Compose 的 `.env` 或 `API_ENV_FILE`、服务器的 `/etc/osu-score-api/env`），并在部署间保持不变，不要复用旧 `usage.json` 中的盐。API 启动时会迁移旧统计，删除旧盐、玩家及访客哈希，保留历史日期的汇总和全部查询计数；迁移当天的去重玩家数、回访数从零重新统计，回访识别也重新积累。更换或移除密钥会采用相同处理。未配置密钥时，新记录的去重玩家数与回访数为 0（未启用），不表示没有玩家或回访。已有备份中的旧盐、哈希不会自动清除。统计文件读取或迁移失败会记录 `usage_write_failed`，不会覆盖损坏文件或中断成绩服务。
 
+### 来源统计
+
 来源链接可使用 `https://你的域名/?from=bili`、`/zh?from=youtube` 等；前端把当前页面的 `from` 标签附加到成绩 API 请求，并写入 `days[UTC日期].queries_by_source`，例如 `{"bili":12,"youtube":3,"direct":5}`。每个通过校验与限流、进入查询处理的后端请求计一次，包括服务端缓存命中和上游查询失败；不是页面访问量、去重人数或成功次数。标签会去除首尾空白并转为小写，只接受 1–32 位英文字母、数字、下划线和连字符，且以字母或数字开头；缺失或非法标签归为 `direct`，每天最多保留 64 个自定义来源，新增的超额来源归为 `other`。来源标签以明文保存，请只填写渠道名称；不保存完整页面 URL，不额外持久化来源。来源由请求方提供，可以伪造，只用于粗略渠道统计；旧数据不会回填来源。
+
+### 缓存与数据保留
 
 浏览器缓存命中不产生后端请求，因此不会新增服务端统计。统计文件没有管理页面或查询接口，写入失败不影响成绩返回。成绩与图片缓存包含公开玩家资料、成绩和素材；文件最后写入满 180 天后，由后续缓存操作触发清理。备份时应同时考虑缓存和统计文件。
 
+### 第三方请求
+
 页面样式会向 Google Fonts 请求 DM Sans 与 Space Grotesk；正常页面展示的头像和曲绘会由浏览器直接请求 osu! 官方图片域名，PNG 导出则通过本站同源图片缓存。第三方会收到完成请求所需的网络信息，其处理和保留规则由相应服务决定。内置部署 Nginx 发送 `Referrer-Policy: no-referrer`，不随这些请求发送当前页面地址。
+
+### 日志与请求限制
 
 应用日志会记录原始玩家查询值，以及成功解析后的公开用户名和玩家 ID，便于排障；不会记录个人 API 密钥、原始访客 ID、访问 IP、OAuth token 或图片 URL。默认 Docker 日志按 10 MiB、最多 3 个文件轮换，不承诺固定天数；外层反向代理和第三方服务的日志策略由部署者或服务提供方负责。
 
