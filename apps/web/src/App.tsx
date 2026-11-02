@@ -168,12 +168,10 @@ function readRecent(): RecentPlayer[] {
 export default function App() {
   const [recent, setRecent] = useState(readRecent);
   const [previousResult, setPreviousResult] = useState(false);
-  const [searchedName, setSearchedName] = useState("");
   const [pendingName, setPendingName] = useState("");
   const [lastQuery, setLastQuery] = useState<{
     name: string;
     mode: QueryMode;
-    limit: number;
   } | null>(null);
   const [preview, setPreview] = useState<{ url: string; blob: Blob } | null>(
     null,
@@ -220,7 +218,6 @@ export default function App() {
   const [waiting, setWaiting] = useState<WaitingState | null>(null);
   const [error, setError] = useState("");
   const [result, setResult] = useState<ScoresResponse | null>(null);
-  const [resultLimit, setResultLimit] = useState(20);
   const [cache, setCache] = useState("");
   const [refreshAt, setRefreshAt] = useState<number | null>(null);
   const input = useRef<HTMLInputElement>(null);
@@ -287,11 +284,7 @@ export default function App() {
     await fetchScores(name, mode);
   }
 
-  async function fetchScores(
-    name: string,
-    selectedMode: QueryMode,
-    selectedLimit = limit,
-  ) {
+  async function fetchScores(name: string, selectedMode: QueryMode) {
     request.current?.abort();
     setLoading(false);
     setWaiting(null);
@@ -300,7 +293,7 @@ export default function App() {
     setDownloadProgress(null);
     setDownloadReady(false);
     setPreview(null);
-    setLastQuery({ name, mode: selectedMode, limit: selectedLimit });
+    setLastQuery({ name, mode: selectedMode });
     setPendingName(name);
     const credentials = useOwnApi
       ? { clientId: apiClientId.trim(), clientSecret: apiClientSecret.trim() }
@@ -326,7 +319,7 @@ export default function App() {
         try {
           const response = await getScores(
             name,
-            selectedLimit,
+            50,
             selectedMode,
             controller.signal,
             credentials,
@@ -334,7 +327,6 @@ export default function App() {
           if (!controller.signal.aborted) {
             setResult(response.data);
             setPreviousResult(false);
-            setSearchedName(name);
             updateRecent(
               [
                 {
@@ -348,7 +340,6 @@ export default function App() {
                 ),
               ].slice(0, 5),
             );
-            setResultLimit(selectedLimit);
             setCache(response.cache);
             setRefreshAt(response.refreshAt);
           }
@@ -391,18 +382,15 @@ export default function App() {
     if (next === mode) return;
     setMode(next);
     setError("");
-    if (result && username.trim().toLowerCase() === searchedName.toLowerCase())
-      void fetchScores(searchedName, next);
   }
 
   function changeLimit(next: number) {
+    if (next === limit) return;
     setLimit(next);
-    if (
-      next !== limit &&
-      result &&
-      username.trim().toLowerCase() === searchedName.toLowerCase()
-    )
-      void fetchScores(searchedName, mode, next);
+    setPreview(null);
+    setDownloadError("");
+    setDownloadProgress(null);
+    setDownloadReady(false);
   }
 
   function cancelQuery() {
@@ -414,7 +402,7 @@ export default function App() {
   async function downloadScores() {
     if (!result || loading || downloadInProgress.current) return;
     if (preview) {
-      saveBestScores(preview.blob, result, resultLimit);
+      saveBestScores(preview.blob, result, limit);
       return;
     }
     downloadInProgress.current = true;
@@ -424,12 +412,12 @@ export default function App() {
     setDownloadError("");
     setDownloadReady(false);
     try {
-      const blob = await renderBestScores(result, resultLimit, (progress) => {
+      const blob = await renderBestScores(result, limit, (progress) => {
         if (!controller.signal.aborted) setDownloadProgress(progress);
       });
       if (!controller.signal.aborted) {
         setPreview({ blob, url: URL.createObjectURL(blob) });
-        saveBestScores(blob, result, resultLimit);
+        saveBestScores(blob, result, limit);
         setDownloadReady(true);
       }
     } catch (failure) {
@@ -446,6 +434,7 @@ export default function App() {
   const selectedModeLabel =
     mode === "auto" ? t("defaultMode") : modeLabels[mode];
   const customIntro = language === "zh" ? intro : introEn;
+  const scores = result?.scores.slice(0, limit) ?? [];
 
   return (
     <div className="app-shell">
@@ -757,11 +746,7 @@ export default function App() {
                   type="button"
                   disabled={loading || exporting}
                   onClick={() =>
-                    void fetchScores(
-                      lastQuery.name,
-                      lastQuery.mode,
-                      lastQuery.limit,
-                    )
+                    void fetchScores(lastQuery.name, lastQuery.mode)
                   }
                 >
                   {t("retry")}
@@ -797,7 +782,7 @@ export default function App() {
             )}
             <div
               className="player-card"
-              key={`${result.player.user_id}-${result.mode}-${resultLimit}-${result.fetched_at}`}
+              key={`${result.player.user_id}-${result.mode}-${result.fetched_at}`}
             >
               <div className="player-identity">
                 {result.player.avatar_url ? (
@@ -859,9 +844,9 @@ export default function App() {
                 <Trophy size={17} />
                 <h2>{t("bestPerformance")}</h2>
                 <span>
-                  {modeLabels[result.mode]} · Best {resultLimit}
+                  {modeLabels[result.mode]} · Best {limit}
                 </span>
-                <span>{t("scoreCount", { count: result.scores.length })}</span>
+                <span>{t("scoreCount", { count: scores.length })}</span>
               </div>
               <span className="cache-status">
                 <span className="live-dot" />
@@ -880,7 +865,7 @@ export default function App() {
               <button
                 type="button"
                 className="download-button"
-                disabled={loading || exporting || !result.scores.length}
+                disabled={loading || exporting || !scores.length}
                 onClick={() => void downloadScores()}
               >
                 {exporting ? (
@@ -892,7 +877,7 @@ export default function App() {
                   ? t("downloadingImage")
                   : preview
                     ? t("downloadAgain")
-                    : t("downloadImage", { count: resultLimit })}
+                    : t("downloadImage", { count: limit })}
               </button>
             </div>
             <div className="export-feedback">
@@ -911,7 +896,7 @@ export default function App() {
                   <div>
                     <strong>
                       {exporting
-                        ? t("downloadTitle", { count: resultLimit })
+                        ? t("downloadTitle", { count: limit })
                         : t("downloadReady")}
                     </strong>
                     <p>
@@ -966,9 +951,9 @@ export default function App() {
                 )}
               </details>
             )}
-            {result.scores.length ? (
+            {scores.length ? (
               <div className="score-list">
-                {result.scores.map((score, index) => (
+                {scores.map((score, index) => (
                   <ScoreRow
                     key={`${score.score_id}-${score.beatmap_id}-${score.played_at}`}
                     score={score}
