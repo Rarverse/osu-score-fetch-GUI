@@ -1036,18 +1036,18 @@ export default function App() {
         </a>
         */}
       </footer>
-      {showQuickNav && result && (
-        <nav className="quick-nav" aria-label={t("quickNavigation")}>
-          <span>
-            {result.player.username}
-            <span className="quick-nav-mode"> · {modeLabels[result.mode]}</span>
-          </span>
-          <button type="button" onClick={backToSearch}>
-            <Search size={16} />
-            {t("searchAgain")}
-          </button>
+      {result && (
+        <nav
+          className={`quick-nav${showQuickNav ? " quick-nav-visible" : ""}`}
+          aria-label={t("quickNavigation")}
+        >
+          <div className="quick-nav-info">
+            <span className="quick-nav-name">{result.player.username}</span>
+            <span className="quick-nav-mode">{modeLabels[result.mode]}</span>
+          </div>
           <button
             type="button"
+            className="quick-nav-up"
             aria-label={t("backToTop")}
             onClick={backToSearch}
           >
