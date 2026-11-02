@@ -41,6 +41,8 @@ docker compose up -d
 
 限流、缓存等 API 配置也可写进 `.env`，完整变量表见仓库 README。`CACHE_PATH` 和 `STATS_PATH` 由 Compose 固定在数据卷中。API 必须保持单 worker、单副本，限流和并发锁目前位于进程内。
 
+如需去重玩家数和回访统计，在实际使用的 API 环境文件中设置 `STATS_HASH_SALT`（使用 `openssl rand -hex 32` 生成，至少 32 字符），部署间保持不变；自动部署使用 `/etc/osu-score-api/env`。未设置时仍统计查询总数、模式和 `?from=bili` 等来源，但不保存身份哈希。升级启动时会删除旧统计文件内的盐和旧哈希，保留历史汇总与查询总数，当天去重及回访统计重新开始；更换密钥也会重置这部分统计。详见仓库 README 的迁移说明。
+
 ## 2. 接外部反代
 
 访问链路：访客 → 外部 HTTPS 反代 → HTTP web → API。

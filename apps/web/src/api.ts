@@ -115,8 +115,16 @@ export async function getScores(
     controller.abort();
   }, 90_000);
   try {
+    const source = new URLSearchParams(window.location.search)
+      .get("from")
+      ?.trim()
+      .toLowerCase();
+    const attribution =
+      source && /^[a-z0-9][a-z0-9_-]{0,31}$/.test(source)
+        ? `&from=${encodeURIComponent(source)}`
+        : "";
     const response = await fetch(
-      `/api/v1/players/${encodeURIComponent(username)}/scores?type=best&limit=${limit}${mode === "auto" ? "" : `&mode=${mode}`}`,
+      `/api/v1/players/${encodeURIComponent(username)}/scores?type=best&limit=${limit}${mode === "auto" ? "" : `&mode=${mode}`}${attribution}`,
       { signal: controller.signal, headers },
     );
     if (!response.ok) {

@@ -162,9 +162,13 @@ def test_api_cache_validation_and_rate_limit(tmp_path):
     assert client.get(url).headers["X-Cache"] == "HIT"
     assert client.get("/api/v1/players/123/scores").headers["X-Cache"] == "HIT"
     assert len(calls) == 1
-    limited = client.get(url)
+    assert client.get(url).headers["X-Cache"] == "HIT"
+    assert client.get(url + "?mode=osu").status_code == 200
+    limited = client.get(url + "?mode=taiko")
     assert limited.status_code == 429 and int(limited.headers["Retry-After"]) >= 1
     assert limited.json()["error"]["code"] == "RATE_LIMITED"
+    assert client.get(url).headers["X-Cache"] == "HIT"
+    assert len(calls) == 2
     assert client.get(url + "?limit=51").status_code == 422
     assert client.get(url + "?type=recent").status_code == 422
 
@@ -283,6 +287,8 @@ def test_cache_misses_use_a_separate_per_ip_upstream_cost_budget(tmp_path):
     assert limited.status_code == 429
     assert limited.json()["error"]["code"] == "RATE_LIMITED"
     assert calls == ["first"]
+    assert "player:second" not in app.state.limiter.buckets
+    assert len(app.state.limiter.buckets["player:first"]) == 1
     usage = json.loads((tmp_path / "usage.json").read_text())
     assert next(iter(usage["days"].values()))["queries"] == 2
     assert len(usage["visitors"]) == 1
@@ -411,6 +417,35 @@ def test_player_not_found_is_cached_for_every_mode(tmp_path, monkeypatch):
     assert third.status_code == 404
     assert third.headers["x-cache"] == "MISS"
     assert len(calls) == 2
+
+
+def test_negative_cache_hits_do_not_consume_player_quota(tmp_path):
+    app = create_app(Settings(_env_file=None, cache_path=tmp_path, rate_limit_per_player=1))
+
+    def fetch(*_args):
+        raise ServiceError(404, "PLAYER_NOT_FOUND", "not found")
+
+    app.state.osu.get_user_scores = fetch
+    client = TestClient(app)
+    url = "/api/v1/players/missing/scores"
+    assert client.get(url).status_code == 404
+    cached = client.get(url + "?mode=osu")
+    assert cached.status_code == 404
+    assert cached.headers["X-Cache"] == "HIT"
+    assert len(app.state.limiter.buckets["player:missing"]) == 1
+
+
+def test_cache_hit_on_locked_recheck_does_not_consume_player_quota(tmp_path, monkeypatch):
+    from test_usage import _scores
+
+    app = create_app(Settings(_env_file=None, cache_path=tmp_path, rate_limit_per_player=1))
+    results = iter([None, _scores()])
+    monkeypatch.setattr("app.routers.players._cached_scores", lambda *_args: next(results))
+    response = TestClient(app).get("/api/v1/players/Player/scores")
+    assert response.status_code == 200
+    assert response.headers["X-Cache"] == "HIT"
+    assert "player:player" not in app.state.limiter.buckets
+    assert not any(key.startswith("upstream-ip:") for key in app.state.limiter.buckets)
 
 
 def test_other_upstream_errors_are_not_negatively_cached(tmp_path):

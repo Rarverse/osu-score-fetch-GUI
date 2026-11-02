@@ -8,3 +8,4 @@ def isolate_credentials_and_stats(monkeypatch, tmp_path):
         monkeypatch.delenv(f"OSU_CLIENT_ID{suffix}", raising=False)
         monkeypatch.delenv(f"OSU_CLIENT_SECRET{suffix}", raising=False)
     monkeypatch.setenv("STATS_PATH", str(tmp_path / "stats" / "usage.json"))
+    monkeypatch.setenv("STATS_HASH_SALT", "test-only-statistics-secret-000001")

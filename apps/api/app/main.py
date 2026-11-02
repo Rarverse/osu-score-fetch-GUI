@@ -26,6 +26,10 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    try:
+        app.state.stats.migrate()
+    except Exception as error:
+        logger.warning("usage_write_failed", extra={"fields": safe_error_fields(error)})
     logger.info(
         "api_started",
         extra={
@@ -78,7 +82,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.image_limiter = UpstreamLimiter(settings.osu_requests_per_minute, budget="images")
     app.state.image_queue = asyncio.Queue(maxsize=256)
     app.state.image_pending = set()
-    app.state.stats = UsageStats(settings.stats_path)
+    app.state.stats = UsageStats(
+        settings.stats_path,
+        salt=settings.stats_hash_salt.get_secret_value() if settings.stats_hash_salt else None,
+    )
     app.state.osu = OsuClient(settings)
     app.state.limiter = RateLimiter(settings.rate_limit_window)
     app.state.fetch_lock = Lock()

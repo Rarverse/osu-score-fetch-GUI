@@ -85,8 +85,6 @@ def player_scores(
             ("scores-global:all", settings.rate_limit_global),
             (f"ip:{ip}", settings.rate_limit_per_ip),
         ]
-        if valid_name:
-            limits.append((f"player:{normalize_player(name)}", settings.rate_limit_per_player))
         retry_after = state.limiter.check(limits)
         if retry_after:
             error = ServiceError(429, "RATE_LIMITED", "查询过于频繁，请稍后重试。")
@@ -148,11 +146,12 @@ def player_scores(
                 if result is None:
                     retry_after = state.limiter.check(
                         [
+                            (f"player:{name}", settings.rate_limit_per_player),
                             (
                                 f"upstream-ip:{ip}",
                                 settings.rate_limit_upstream_cost_per_ip,
                                 3,
-                            )
+                            ),
                         ]
                     )
                     if retry_after:
@@ -253,6 +252,7 @@ def player_scores(
                     success=player_id is not None,
                     player_id=player_id,
                     visitor_id=visitor_id,
+                    source=request.query_params.get("from"),
                 )
             except Exception as error:
                 logger.warning("usage_write_failed", extra={"fields": safe_error_fields(error)})

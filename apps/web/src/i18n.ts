@@ -87,7 +87,7 @@ const zh = {
     "查询会发送给本站和 osu!；页面字体来自 Google Fonts，头像与曲绘来自 osu! 图片站，第三方会收到网络请求信息并按各自规则处理。",
   privacyLogs: "本站日志记录玩家查询值，按文件大小轮换而非固定天数。",
   privacyRetention:
-    "匿名统计在下次写入时保留滚动 180 天，缓存文件在最后写入满 180 天后的后续访问中清理；站点闲置时文件可能保留更久。",
+    "匿名统计包含链接来源标签（如 bili），在下次写入时保留滚动 180 天；缓存文件在最后写入满 180 天后的后续访问中清理，站点闲置时文件可能保留更久。",
   privacyCredentials: "个人 API 密钥仅在页面内存和当次请求中使用，不写入文件。",
   busyTitle: "查询服务繁忙，请稍候",
   busyDescription: "查询通道正忙，将自动重试，也可以取消等待。",
@@ -208,7 +208,7 @@ const en: Record<MessageKey, string> = {
   privacyLogs:
     "Site logs record player queries and rotate by file size, not a fixed number of days.",
   privacyRetention:
-    "On the next write, anonymous statistics keep a rolling 180-day window; cache files are cleaned on later access after 180 days from their last write, so idle files may remain longer.",
+    "Anonymous statistics include link source labels (such as bili) and keep a rolling 180-day window on the next write; cache files are cleaned on later access after 180 days from their last write, so idle files may remain longer.",
   privacyCredentials:
     "Personal API credentials stay in page memory and the current request and are not written to files.",
   busyTitle: "The service is busy. Please wait.",

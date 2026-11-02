@@ -1,13 +1,17 @@
 import json
 from datetime import UTC, datetime
 
+import pytest
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 
 from app.config import Settings
 from app.main import create_app
 from app.schemas.scores import Player, ScoresResponse
 from app.services.osu_client import ServiceError
 from app.services.usage import UsageStats
+
+SECRET = "test-only-statistics-secret-000001"
 
 
 def _scores(mode="mania", user_id=123, username="SecretPlayerZZ"):
@@ -28,7 +32,7 @@ def _scores(mode="mania", user_id=123, username="SecretPlayerZZ"):
 
 
 def test_returning_visitor_is_counted_on_a_later_day_only(tmp_path, monkeypatch):
-    stats = UsageStats(tmp_path / "usage.json")
+    stats = UsageStats(tmp_path / "usage.json", salt="test-only-statistics-secret-000001")
     current = {"day": "2026-10-14"}
 
     class Clock(datetime):
@@ -66,7 +70,12 @@ def test_returning_visitor_is_counted_on_a_later_day_only(tmp_path, monkeypatch)
 
 
 def test_usage_retention_and_visitor_cap_are_bounded(tmp_path, monkeypatch):
-    stats = UsageStats(tmp_path / "usage.json", retention_days=2, max_visitors=3)
+    stats = UsageStats(
+        tmp_path / "usage.json",
+        retention_days=2,
+        max_visitors=3,
+        salt="test-only-statistics-secret-000001",
+    )
     current = {"day": "2026-10-14"}
 
     class Clock(datetime):
@@ -202,3 +211,125 @@ def test_api_counts_distinct_players_only_for_successful_queries(tmp_path):
     )
     assert allowed.status_code == 200
     assert "x-visitor-id" in allowed.headers["access-control-allow-headers"].lower()
+
+
+def test_secret_is_external_and_deduplication_survives_restart(tmp_path):
+    path = tmp_path / "usage.json"
+    for _ in range(2):
+        UsageStats(path, salt=SECRET).record(
+            mode="osu", success=True, player_id="123", visitor_id="visitor-123"
+        )
+    raw = path.read_text()
+    payload = json.loads(raw)
+    day = next(iter(payload["days"].values()))
+    assert SECRET not in raw
+    assert "salt" not in payload
+    assert day["queries"] == 2
+    assert day["distinct_players"] == 1
+    assert len(payload["visitors"]) == 1
+
+
+@pytest.mark.parametrize("salt", [None, SECRET])
+def test_startup_migrates_legacy_stats_without_waiting_for_query(tmp_path, salt):
+    path = tmp_path / "usage.json"
+    today = datetime.now(UTC).date().isoformat()
+    legacy_day = {
+        "queries": 9,
+        "queries_by_mode": {"osu": 9},
+        "distinct_players": 5,
+        "returning_visitors": 2,
+        "player_hashes": ["legacy-player-hash"],
+        "returning_visitor_hashes": ["legacy-visitor-hash"],
+    }
+    path.write_text(
+        json.dumps(
+            {
+                "salt": "legacy-salt-0123456789",
+                "visitors": {"legacy-visitor-hash": "2020-01-01"},
+                "days": {"2020-01-01": legacy_day, today: legacy_day},
+            }
+        )
+    )
+    app = create_app(
+        Settings(
+            _env_file=None, cache_path=tmp_path / "cache", stats_path=path, stats_hash_salt=salt
+        )
+    )
+    with TestClient(app):
+        payload = json.loads(path.read_text())
+    assert "legacy" not in path.read_text()
+    assert "salt" not in payload
+    assert payload["visitors"] == {}
+    assert payload["days"]["2020-01-01"]["distinct_players"] == 5
+    assert payload["days"]["2020-01-01"]["returning_visitors"] == 2
+    assert payload["days"][today]["queries"] == 9
+    assert payload["days"][today]["queries_by_mode"] == {"osu": 9}
+    assert payload["days"][today]["distinct_players"] == 0
+    assert payload["days"][today]["returning_visitors"] == 0
+
+
+@pytest.mark.parametrize("replacement", [None, "a-different-statistics-secret-0001"])
+def test_secret_rotation_clears_old_hashes_and_keeps_query_counts(tmp_path, replacement):
+    path = tmp_path / "usage.json"
+    UsageStats(path, salt=SECRET).record(
+        mode="osu", success=True, player_id="123", visitor_id="visitor-123"
+    )
+    old = json.loads(path.read_text())
+    old_hash = next(iter(old["days"].values()))["player_hashes"][0]
+    stats = UsageStats(path, salt=replacement)
+    stats.migrate()
+    stats.record(mode="osu", success=True, player_id="123", visitor_id="visitor-123")
+    payload = json.loads(path.read_text())
+    day = next(iter(payload["days"].values()))
+    assert old_hash not in path.read_text()
+    assert day["queries"] == 2
+    assert day["distinct_players"] == (1 if replacement else 0)
+
+
+def test_missing_secret_keeps_aggregates_without_identity_hashes(tmp_path):
+    path = tmp_path / "usage.json"
+    UsageStats(path).record(mode="mania", success=True, player_id="123", visitor_id="visitor-123")
+    payload = json.loads(path.read_text())
+    day = next(iter(payload["days"].values()))
+    assert payload["key_id"] is None
+    assert payload["visitors"] == {}
+    assert day["queries"] == 1
+    assert day["player_hashes"] == []
+    assert day["returning_visitor_hashes"] == []
+
+
+def test_short_stats_secret_is_rejected_and_valid_secret_is_redacted():
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, stats_hash_salt="too-short")
+    assert SECRET not in repr(Settings(_env_file=None, stats_hash_salt=SECRET))
+
+
+def test_source_counts_include_cache_hits_but_not_rate_limited_requests(tmp_path):
+    path = tmp_path / "usage.json"
+    app = create_app(
+        Settings(
+            _env_file=None, cache_path=tmp_path / "cache", stats_path=path, rate_limit_per_player=1
+        )
+    )
+    app.state.osu.get_user_scores = lambda *_args: _scores()
+    client = TestClient(app)
+    url = "/api/v1/players/Player/scores"
+    for source in ("bili", " BILI ", "youtube", "", "bad/source"):
+        assert client.get(url, params={"from": source}).status_code == 200
+    assert client.get(url, params={"from": "blocked", "mode": "osu"}).status_code == 429
+    day = next(iter(json.loads(path.read_text())["days"].values()))
+    assert day["queries"] == 5
+    assert day["queries_by_source"] == {"bili": 2, "youtube": 1, "direct": 2}
+
+
+def test_source_labels_and_number_of_buckets_are_bounded(tmp_path):
+    path = tmp_path / "usage.json"
+    stats = UsageStats(path)
+    sources = [*(f"source-{index}" for index in range(70)), "", "x" * 33, "bili\nextra"]
+    for source in sources:
+        stats.record(mode=None, success=False, player_id=None, visitor_id=None, source=source)
+    counts = next(iter(json.loads(path.read_text())["days"].values()))["queries_by_source"]
+    assert len(counts) == 66
+    assert counts["other"] == 6
+    assert counts["direct"] == 3
+    assert sum(counts.values()) == len(sources)

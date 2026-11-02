@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     cache_path: Path = API_ROOT / ".cache"
     # Salted daily aggregates. Override in production so this stays outside release dirs.
     stats_path: Path = API_ROOT / "data" / "cache" / "usage.json"
+    stats_hash_salt: SecretStr | None = Field(default=None, min_length=32)
     negative_cache_ttl: int = Field(default=60, ge=1, le=86400)
     rate_limit_window: int = Field(default=60, ge=1)
     rate_limit_global: int = Field(default=120, ge=1)

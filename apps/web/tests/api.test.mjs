@@ -28,6 +28,8 @@ function loadApi(overrides = {}) {
     setTimeout,
     clearTimeout,
     crypto: webcrypto,
+    URLSearchParams,
+    window: { location: { search: "" } },
     localStorage: { getItem: () => null, setItem: () => {} },
     ...overrides,
   };
@@ -48,6 +50,44 @@ function loadApi(overrides = {}) {
     },
   });
   return apiModule.exports;
+}
+
+for (const [search, expected] of [
+  ["?from=bili", "bili"],
+  ["?from=%20YouTube%20&unrelated=private", "youtube"],
+  ["?from=bad%26value", null],
+  [`?from=${"x".repeat(33)}`, null],
+  ["", null],
+]) {
+  test(`query attribution handles ${search || "no source"} without splitting the cache`, async () => {
+    const urls = [];
+    const location = { search };
+    const api = loadApi({
+      window: { location },
+      fetch: async (url) => {
+        urls.push(url);
+        return new Response(
+          JSON.stringify({
+            player: { username: "Player", user_id: 123 },
+            mode: "mania",
+            scores: [],
+          }),
+          { headers: { "X-Cache-TTL": "60" } },
+        );
+      },
+    });
+    const signal = new AbortController().signal;
+    await api.getScores("Player", 20, "auto", signal);
+    const params = new URL(urls[0], "https://example.com").searchParams;
+    assert.equal(params.get("from"), expected);
+    assert.equal(params.has("unrelated"), false);
+    location.search = "?from=another";
+    assert.equal(
+      (await api.getScores("123", 20, "mania", signal)).cache,
+      "MEMORY",
+    );
+    assert.equal(urls.length, 1);
+  });
 }
 
 test("HTTP browsers without randomUUID can query and reuse their visitor ID", async () => {
