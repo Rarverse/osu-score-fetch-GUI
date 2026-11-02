@@ -168,6 +168,7 @@ function readRecent(): RecentPlayer[] {
 export default function App() {
   const [recent, setRecent] = useState(readRecent);
   const [previousResult, setPreviousResult] = useState(false);
+  const [searchedName, setSearchedName] = useState("");
   const [pendingName, setPendingName] = useState("");
   const [lastQuery, setLastQuery] = useState<{
     name: string;
@@ -327,6 +328,7 @@ export default function App() {
           if (!controller.signal.aborted) {
             setResult(response.data);
             setPreviousResult(false);
+            setSearchedName(name);
             updateRecent(
               [
                 {
@@ -382,6 +384,8 @@ export default function App() {
     if (next === mode) return;
     setMode(next);
     setError("");
+    if (result && username.trim().toLowerCase() === searchedName.toLowerCase())
+      void fetchScores(searchedName, next);
   }
 
   function changeLimit(next: number) {
