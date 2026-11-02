@@ -1039,7 +1039,8 @@ export default function App() {
       {showQuickNav && result && (
         <nav className="quick-nav" aria-label={t("quickNavigation")}>
           <span>
-            {result.player.username} · {modeLabels[result.mode]}
+            {result.player.username}
+            <span className="quick-nav-mode"> · {modeLabels[result.mode]}</span>
           </span>
           <button type="button" onClick={backToSearch}>
             <Search size={16} />

@@ -214,6 +214,11 @@ export async function renderBestScores(
         halo.addColorStop(1, `${shape.color}00`);
         ctx.fillStyle = halo;
         ctx.fillRect(-1.8, -1.8, 3.6, 3.6);
+        // Bound the filter layer to this motif, not the full export canvas.
+        // Leave room beyond the stroke for the blur's soft edge.
+        ctx.beginPath();
+        ctx.rect(-2, -2, 4, 4);
+        ctx.clip();
         ctx.filter = "blur(0.8px)";
         ctx.strokeStyle = `${shape.color}34`;
         ctx.lineWidth = 2 / size;

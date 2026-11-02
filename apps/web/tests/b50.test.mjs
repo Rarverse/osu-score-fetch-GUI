@@ -50,6 +50,7 @@ function loadRenderer({
     "save",
     "beginPath",
     "roundRect",
+    "rect",
     "clip",
     "fillRect",
     "restore",

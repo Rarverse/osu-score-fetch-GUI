@@ -1603,7 +1603,7 @@ footer a:hover {
   backdrop-filter: blur(18px) saturate(135%);
 }
 .quick-nav > span {
-  justify-self: start;
+  justify-self: stretch;
   min-width: 0;
   font-size: 12px;
   overflow: hidden;
@@ -1617,11 +1617,19 @@ footer a:hover {
   gap: 6px;
   flex-shrink: 0;
   min-width: 44px;
+  white-space: nowrap;
 }
 .quick-nav > button:last-child {
   justify-self: end;
 }
 @media (max-width: 600px) {
+  .quick-nav {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .quick-nav-mode,
+  .quick-nav > button:last-child {
+    display: none;
+  }
   .hero-description > h2 + p {
     font-size: 15px;
     margin-bottom: 20px;
